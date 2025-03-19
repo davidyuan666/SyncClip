@@ -40,4 +40,5 @@ logs/
 -p/
 build/
 dist/
-.testcase/
+testcase/
+*.png
