@@ -1,0 +1,90 @@
+[project]
+name = "SyncClip"
+version = "0.1.0"
+description = "SyncClip service"
+requires-python = ">=3.10,<3.13"
+
+dependencies = [    
+    # Whisper 及其依赖
+    "openai-whisper @ git+https://github.com/openai/whisper.git",
+    "numba>=0.56.4",
+    "llvmlite>=0.39.1",
+    "numpy>=1.18.0",
+
+    # 基础依赖
+    "pip>=20.0",
+    "PyYAML>=6.0.1",
+    "omegaconf>=2.0.5",
+    "hydra-core>=1.0.7",
+    "setuptools>=65.5.1",
+
+    # 视频处理
+    "opencv-python-headless>=4.5.0",
+    "ffmpeg-python",
+    
+    # AI 模型和框架 (使用系统已有的 torch)
+    "transformers>=4.30.0",
+    "openai>=1.0.0",
+    "accelerate>=0.20.0",
+    "Pillow>=9.2.0",
+    "open_clip_torch",
+    "timm>=0.4.12",
+    "tensorboard",
+    
+    # ModelScope 相关
+    "modelscope>=1.9.5",
+    "datasets>=2.14.0",
+    "sortedcontainers>=2.4.0",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.1",
+
+    # 网络相关
+    "httpx[socks]>=0.24.0",
+    "socksio>=1.0.0",
+
+    # Web 框架
+    "uvicorn",
+    "fastapi",
+    "python-dotenv",
+    
+    # 工具库
+    "cos-python-sdk-v5",
+    "tqdm>=4.65.0",
+    "requests>=2.26.0",
+    "addict",
+    "simplejson",
+    "colorama",
+
+    "reportlab",
+    "ffmpeg-python",
+    "websockets>=15.0",
+]
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = false
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "pyinstaller>=6.5.0",
+]
+
+[[tool.pdm.source]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+verify_ssl = true
+
+[[tool.pdm.source]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple"
+verify_ssl = true
+
+[tool.pdm.scripts]
+start = "python -m uvicorn app:app --host 0.0.0.0 --port 6001 --reload"
+test = "pytest tests/"
+build = { cmd = "pyinstaller app.py --onefile" }
+clean = { cmd = "rm -rf build dist *.spec" }
