@@ -19,12 +19,13 @@ make start    # Start the service
 
 If you use SyncClip in your project or research, please cite it as follows:
 
+```bibtex
 @software{SyncClip,
-author = {[David Yuan]},
-title = {SyncClip},
-year = {[2025]},
-url = {[https://github.com/davidyuan666/SyncClip]},
+  author = {David Yuan},
+  title = {SyncClip},
+  year = {2025},
+  url = {https://github.com/davidyuan666/SyncClip},
 }
+```
 
-
-For more information, please contact [wu.xiguanghua2014@gmail.com].
+For more information, please contact wu.xiguanghua2014@gmail.com.
