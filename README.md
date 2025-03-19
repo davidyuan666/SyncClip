@@ -9,11 +9,20 @@ This project's code is open source, but any usage requires proper attribution to
 
 Follow these steps to install and run SyncClip:
 
+Create an `.env` file with the required environment variables, including your OpenAI API key
+
 ```bash
 make install  # Install dependencies
 make build    # Build the project
 make start    # Start the service
 ```
+
+## Features
+
+- Real-time synchronization across devices
+- Secure clipboard sharing
+- Support for text, images, and files
+
 
 ## References
 
@@ -27,5 +36,9 @@ If you use SyncClip in your project or research, please cite it as follows:
   url = {https://github.com/davidyuan666/SyncClip},
 }
 ```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 For more information, please contact wu.xiguanghua2014@gmail.com.
