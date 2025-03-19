@@ -29,13 +29,19 @@ plt.title('Impact of Video Complexity on Synchronization Error', fontsize=14, fo
 plt.legend(loc='upper left', fontsize=11)
 
 # 添加注释指出主要趋势
-plt.annotate('SyncClip maintains lower\nerror rates at high complexity', 
-             xy=(18, 140), xytext=(15, 90),
-             arrowprops=dict(facecolor='black', shrink=0.05, width=1.5),
-             fontsize=10)
+# plt.annotate('SyncClip', 
+#              xy=(18, 140), xytext=(15, 90),
+#              arrowprops=dict(facecolor='black', shrink=0.05, width=1.5),
+#              fontsize=10)
 
 plt.tight_layout()
 
 # 保存图像
 plt.savefig('complexity_impact.png', dpi=300)
 plt.show()
+
+# 以下所有代码都被注释掉
+'''
+# 第二个可视化：不同视频类型的同步性能
+# ... 其余代码 ...
+'''

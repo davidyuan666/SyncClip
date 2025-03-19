@@ -40,3 +40,4 @@ logs/
 -p/
 build/
 dist/
+.testcase/
