@@ -53,24 +53,6 @@ class LLMUtil:
         self.messages = []
 
         """
-        Azure 配置
-        """
-        self.azure_key = "c5cf096ac45e477ca8766c389299d243"
-        self.azure_endpoint = "https://vesync-openai-survey.openai.azure.com/"
-
-        self.azure_client = AzureOpenAI(
-            azure_endpoint=self.azure_endpoint,
-            api_key=self.azure_key,
-            api_version="2024-02-01",
-        )
-
-        self.azure_json_client = AzureOpenAI(
-            azure_endpoint=self.azure_endpoint,
-            api_key=self.azure_key,
-            api_version="2024-03-01-preview",
-        )
-
-        """
         eleven lab 配置 https://elevenlabs.io/docs/api-reference/getting-started
         """
         self.XI_API_KEY = os.getenv("XI_API_KEY")

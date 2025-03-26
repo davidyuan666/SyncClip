@@ -1,5 +1,6 @@
-# SyncClip
-The implementation of SyncClip
+# SyncClipAgent
+
+The implementation of SyncCLIPAgent: Leveraging LLMs for Automated Video Editing with Audiovisual Synchronization
 
 ## Open Source Notice
 
@@ -9,20 +10,26 @@ This project's code is open source, but any usage requires proper attribution to
 
 Follow these steps to install and run SyncClip:
 
-Create an `.env` file with the required environment variables, including your OpenAI API key
+1. Create an `.env` file with the required environment variables:
+   ```bash
+   OPENAI_API_KEY=your_api_key_here
+   ```
 
-```bash
-make install  # Install dependencies
-make build    # Build the project
-make start    # Start the service
-```
+2. Run the following commands:
+   ```bash
+   make install  # Install dependencies
+   make build    # Build the project
+   make start    # Start the service
+   ```
 
 ## Features
 
 - Real-time synchronization across devices
 - Secure clipboard sharing
 - Support for text, images, and files
-
+- AI-powered video editing
+- Audiovisual synchronization capabilities
+- Cross-platform compatibility
 
 ## References
 
@@ -39,6 +46,8 @@ If you use SyncClip in your project or research, please cite it as follows:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-For more information, please contact wu.xiguanghua2014@gmail.com.
+## Contact
+
+For more information, please contact wu.xiguanghua2014@gmail.com
