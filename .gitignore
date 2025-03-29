@@ -43,4 +43,5 @@ dist/
 testcase/
 *.png
 testcase/*
+src/evaluation/
 
