@@ -83,6 +83,7 @@ fi
 python -m experiments.run_all \
     $REAL_FLAG \
     --all \
+    --data "$DATA_DIR" \
     --output "$OUTPUT_DIR" \
     "${EXTRA_ARGS[@]}"
 
