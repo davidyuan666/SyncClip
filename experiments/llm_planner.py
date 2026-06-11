@@ -309,10 +309,11 @@ Fix the errors and return a corrected plan. Output ONLY the corrected JSON.
             response = self._get_client().native_chat(revision_prompt)
             corrected = self._parse_json_response(response)
             if corrected:
-                plan.segments = corrected.get("segments", plan.segments)
-                plan.subtitle = corrected.get("subtitle", plan.subtitle)
-                plan.audio_mix = corrected.get("audio_mix", plan.audio_mix)
-                plan.notes = corrected.get("notes", plan.notes)
+                revised = self._build_from_json(corrected, plan.request_id)
+                plan.segments = revised.segments
+                plan.subtitle = revised.subtitle
+                plan.audio_mix = revised.audio_mix
+                plan.notes = revised.notes
             plan.revision_count += 1
             plan.validation_errors = []
         except Exception as e:
