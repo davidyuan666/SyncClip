@@ -80,33 +80,37 @@ class EndToEndRunner:
         logger.info(f"=== [{video_id}] Starting end-to-end pipeline ===")
 
         # 1. Preprocess
+        logger.info(f"  [{video_id}] [1/8] Preprocessing frames (ffmpeg)...")
         t = time.time()
         preprocess = self.preprocessor.process(video_path, video_id, fps_options, mock=mock)
         timing["preprocess_s"] = round(time.time() - t, 2)
-        logger.info(f"  [{video_id}] Preprocess: {len(preprocess.keyframes.get(5, []))} frames @5fps ({timing['preprocess_s']}s)")
+        logger.info(f"  [{video_id}] [1/8] done: {len(preprocess.keyframes.get(5, []))} frames @5fps ({timing['preprocess_s']}s)")
 
         # 2. CLIP
+        logger.info(f"  [{video_id}] [2/8] CLIP ViT-B/32 encoding...")
         t = time.time()
         clip_by_fps = self.clip_extractor.extract_multiple_fps(preprocess.keyframes, mock=mock)
         timing["clip_s"] = round(time.time() - t, 2)
         clip_5fps = clip_by_fps.get(5, clip_by_fps.get(1))
-        logger.info(f"  [{video_id}] CLIP: {len(clip_5fps)} embeddings ({timing['clip_s']}s)")
+        logger.info(f"  [{video_id}] [2/8] done: {len(clip_5fps)} embeddings ({timing['clip_s']}s)")
 
         # 3. Whisper
+        logger.info(f"  [{video_id}] [3/8] Whisper large-v3 transcribing...")
         t = time.time()
         audio_path = preprocess.audio_path or ""
         whisper = self.whisper_transcriber.transcribe(audio_path, mock=mock)
         timing["whisper_s"] = round(time.time() - t, 2)
-        logger.info(f"  [{video_id}] Whisper: {len(whisper)} segments ({timing['whisper_s']}s)")
+        logger.info(f"  [{video_id}] [3/8] done: {len(whisper)} segments ({timing['whisper_s']}s)")
 
         # 4. Build candidates
+        logger.info(f"  [{video_id}] [4/8] Building candidates...")
         t = time.time()
         candidates_by_fps = {}
         for fps, clip_feat in clip_by_fps.items():
             candidates_by_fps[fps] = self.candidate_builder.build(clip_feat, whisper, mock=mock)
         timing["candidates_s"] = round(time.time() - t, 2)
         candidates_5fps = candidates_by_fps.get(5, list(candidates_by_fps.values())[0] if candidates_by_fps else None)
-        logger.info(f"  [{video_id}] Candidates @5fps: {len(candidates_5fps.segments) if candidates_5fps else 0} segments ({timing['candidates_s']}s)")
+        logger.info(f"  [{video_id}] [4/8] done: {len(candidates_5fps.segments) if candidates_5fps else 0} segments ({timing['candidates_s']}s)")
 
         if not candidates_5fps or not candidates_5fps.segments:
             return self._empty_result(video_id, request_id, timing, "No candidates generated")
@@ -121,22 +125,25 @@ class EndToEndRunner:
         timing["projection_s"] = round(time.time() - t, 2)
 
         # 6. LLM planning
+        logger.info(f"  [{video_id}] [6/8] LLM planning (DeepSeek API)...")
         t = time.time()
         plan = self.llm_planner.plan(candidates_5fps, user_request, request_id, target_duration, mock=mock)
         timing["llm_plan_s"] = round(time.time() - t, 2)
-        logger.info(f"  [{video_id}] Plan: {len(plan.segments)} segments, {plan.total_target_duration:.1f}s ({timing['llm_plan_s']}s)")
+        logger.info(f"  [{video_id}] [6/8] done: {len(plan.segments)} segments, {plan.total_target_duration:.1f}s ({timing['llm_plan_s']}s)")
 
         # 7. Validate + revise
+        logger.info(f"  [{video_id}] [7/8] Validating plan...")
         t = time.time()
         plan, report = validate_and_revise(plan, candidates_5fps, self.llm_planner, self.validator, mock=mock)
         timing["validate_s"] = round(time.time() - t, 2)
-        logger.info(f"  [{video_id}] Validation: {'PASS' if report.passed else 'FAIL'} (revisions={plan.revision_count}, {timing['validate_s']}s)")
+        logger.info(f"  [{video_id}] [7/8] done: {'PASS' if report.passed else 'FAIL'} (revisions={plan.revision_count}, {timing['validate_s']}s)")
 
         # 8. Render
+        logger.info(f"  [{video_id}] [8/8] FFmpeg rendering...")
         t = time.time()
         render = self.renderer.render(plan, video_path, mock=mock)
         timing["render_s"] = round(time.time() - t, 2)
-        logger.info(f"  [{video_id}] Render: {'OK' if render.success else 'FAIL'} ({timing['render_s']}s)")
+        logger.info(f"  [{video_id}] [8/8] done: {'OK' if render.success else 'FAIL'} ({timing['render_s']}s)")
 
         total_s = round(time.time() - t0, 2)
         timing["total_s"] = total_s
@@ -169,10 +176,14 @@ class EndToEndRunner:
     ) -> List[Dict]:
         requests = requests or {}
         results = []
+        total = sum(len(p) for p in video_paths.values())
+        count = 0
         for genre, paths in video_paths.items():
             for vp in paths:
+                count += 1
                 vid = Path(vp).stem
                 req = requests.get(genre, f"Create a {genre} highlight video.")
+                logger.info(f"[{count}/{total}] Processing video: {vid}")
                 result = self.run_single(vp, req, video_id=vid, mock=mock)
                 result["genre"] = genre
                 results.append(result)
