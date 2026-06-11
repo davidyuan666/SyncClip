@@ -15,8 +15,8 @@ DEFAULT_MODEL_CONFIG: Dict = {
     "whisper_model": "large-v3",
     "whisper_embedding_dim": 1280,
     "whisper_sample_rate": 16000,
-    "llm_model": "deepseek-v4-pro",
-    "gpt_model": "deepseek-v4-pro",
+    "llm_model": "gpt-4-mini",
+    "gpt_model": "gpt-4-mini",
     "common_projection_dim": 256,
     "projection_method": "pca_linear",
     "tts_model": "eleven_multilingual_v2",
@@ -36,13 +36,13 @@ DEFAULT_FPS_OPTIONS: List[int] = [1, 2, 3, 5]
 DEFAULT_VIDEO_LENGTH_OPTIONS: List[int] = [5, 10, 15, 30]
 
 DEFAULT_HARDWARE_CONFIG: Dict = {
-    "gpu": "NVIDIA RTX 4090",
-    "gpu_memory_gb": 25.2,
-    "cpu": "AMD EPYC 9354",
-    "cpu_cores": 16,
-    "ram_gb": 60.1,
-    "cuda_version": "12.1",
-    "pytorch_version": "2.2.2",
+    "gpu": os.getenv("SYNCCLIP_GPU", "NVIDIA RTX 4090"),
+    "gpu_memory_gb": float(os.getenv("SYNCCLIP_GPU_MEMORY_GB", "25.2")),
+    "cpu": os.getenv("SYNCCLIP_CPU", "AMD EPYC 9354"),
+    "cpu_cores": int(os.getenv("SYNCCLIP_CPU_CORES", "16")),
+    "ram_gb": float(os.getenv("SYNCCLIP_RAM_GB", "60.1")),
+    "cuda_version": os.getenv("SYNCCLIP_CUDA_VERSION", "12.1"),
+    "pytorch_version": os.getenv("SYNCCLIP_PYTORCH_VERSION", "2.2.2"),
 }
 
 
@@ -54,9 +54,9 @@ class ExperimentConfig:
     video_length_options: List[int] = field(default_factory=lambda: list(DEFAULT_VIDEO_LENGTH_OPTIONS))
     hardware: Dict = field(default_factory=lambda: dict(DEFAULT_HARDWARE_CONFIG))
 
-    dataset_dir: str = "experiments/data"
-    output_dir: str = "experiments/output"
-    annotation_dir: str = "experiments/annotations"
+    dataset_dir: str = os.getenv("SYNCCLIP_DATA_DIR", "experiments/data")
+    output_dir: str = os.getenv("SYNCCLIP_OUTPUT_DIR", "experiments/output")
+    annotation_dir: str = os.getenv("SYNCCLIP_ANNOTATION_DIR", "experiments/annotations")
     seed: int = 42
     n_annotators: int = 3
     n_bootstrap: int = 1000
@@ -68,15 +68,13 @@ class ExperimentConfig:
     tts_enabled: bool = False
 
     genre_list: List[str] = field(default_factory=lambda: [
-        "action", "documentary", "vlog", "news", "sports", "music_video", "short_film",
+        "vlog",
     ])
     genre_counts: Dict[str, int] = field(default_factory=lambda: {
-        "action": 20, "documentary": 15, "vlog": 25, "news": 10,
-        "sports": 15, "music_video": 10, "short_film": 5,
+        "vlog": 25,
     })
     genre_durations: Dict[str, float] = field(default_factory=lambda: {
-        "action": 10.5, "documentary": 12.0, "vlog": 8.5, "news": 9.0,
-        "sports": 11.0, "music_video": 7.5, "short_film": 14.0,
+        "vlog": 8.5,
     })
 
     robustness_cases: List[str] = field(default_factory=lambda: [

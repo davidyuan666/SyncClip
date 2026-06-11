@@ -1,8 +1,10 @@
 """
-Preprocessing pipeline: frame extraction, audio extraction, timestamp generation.
+Preprocessing pipeline: frame extraction, SSIM-based keyframe filtering,
+audio extraction, and timestamp generation.
 
-Extracts frames at configurable fps (1/2/3/5), separates audio stream, and
-saves all metadata with timestamps for reproducible experiments.
+Implements paper Eq.1-3: frames sampled at F_s (1/2/3/5 fps), then
+SSIM-based change detection C_i = 1 - SSIM(F_i, F_{i-1}) filters
+keyframes where C_i > theta (default 0.18).
 
 Usage:
     python -m experiments.preprocess --video video.mp4 --fps 5 --output-dir ./work
@@ -21,9 +23,22 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+try:
+    import cv2
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
 logger = logging.getLogger(__name__)
 
 FPS_OPTIONS = [1, 2, 3, 5]
+DEFAULT_SSIM_THETA = 0.18
 
 
 @dataclass
@@ -94,15 +109,18 @@ class PreprocessResult:
 
 
 class VideoPreprocessor:
-    """Extracts frames at multiple fps rates, audio, and metadata from a video."""
+    """Extracts frames at multiple fps rates, applies SSIM keyframe filtering, audio extraction."""
 
-    def __init__(self, work_dir: str = "experiments/output/work", seed: int = 42):
+    def __init__(self, work_dir: str = "experiments/output/work", seed: int = 42,
+                 ssim_theta: float = DEFAULT_SSIM_THETA):
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self.rng = np.random.default_rng(seed)
+        self.ssim_theta = ssim_theta
 
     def process(self, video_path: str, video_id: str = "", fps_options: Optional[List[int]] = None,
-                extract_audio: bool = True, mock: bool = False) -> PreprocessResult:
+                extract_audio: bool = True, mock: bool = False,
+                apply_ssim: bool = True) -> PreprocessResult:
         fps_options = fps_options or FPS_OPTIONS
         video_id = video_id or Path(video_path).stem
 
@@ -117,6 +135,8 @@ class VideoPreprocessor:
 
         for fps in fps_options:
             frames = self._extract_frames(video_path, video_work, fps, metadata.duration_s)
+            if apply_ssim and len(frames) >= 2:
+                frames = self._apply_ssim_filter(frames, self.ssim_theta)
             keyframes[fps] = frames
 
         audio_path: Optional[str] = None
@@ -241,10 +261,97 @@ class VideoPreprocessor:
             subprocess.run(cmd, capture_output=True, timeout=120)
         return audio_path
 
+    def _apply_ssim_filter(self, keyframes: List[Keyframe], theta: float) -> List[Keyframe]:
+        """Paper Eq.2-3: retain frames where C_i = 1 - SSIM(F_i, F_{i-1}) > theta."""
+        if len(keyframes) < 2:
+            return keyframes
+
+        filtered = [keyframes[0]]
+        for i in range(1, len(keyframes)):
+            ssim_val = _compute_frame_ssim(keyframes[i - 1].path, keyframes[i].path)
+            change_score = 1.0 - ssim_val
+            if change_score > theta:
+                filtered.append(keyframes[i])
+
+        return filtered
+
     def _save_result(self, result: PreprocessResult) -> None:
         save_path = Path(result.work_dir) / "preprocess_result.json"
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump(result.to_dict(), f, indent=2, ensure_ascii=False)
+
+
+def _compute_frame_ssim(frame_path_a: str, frame_path_b: str) -> float:
+    """Compute SSIM between two frame images. Falls back to numpy if opencv not available."""
+    if HAS_CV2:
+        try:
+            img_a = cv2.imread(frame_path_a, cv2.IMREAD_GRAYSCALE)
+            img_b = cv2.imread(frame_path_b, cv2.IMREAD_GRAYSCALE)
+            if img_a is None or img_b is None:
+                return _numpy_ssim_from_path(frame_path_a, frame_path_b)
+            if img_a.shape != img_b.shape:
+                img_b = cv2.resize(img_b, (img_a.shape[1], img_a.shape[0]))
+            return _ssim_numpy(img_a.astype(np.float64), img_b.astype(np.float64))
+        except Exception:
+            return _numpy_ssim_from_path(frame_path_a, frame_path_b)
+    return _numpy_ssim_from_path(frame_path_a, frame_path_b)
+
+
+def _numpy_ssim_from_path(path_a: str, path_b: str) -> float:
+    if not HAS_PIL:
+        return 0.5
+    img_a = np.array(Image.open(path_a).convert("L"), dtype=np.float64)
+    img_b = np.array(Image.open(path_b).convert("L"), dtype=np.float64)
+    if img_a.shape != img_b.shape:
+        h, w = min(img_a.shape[0], img_b.shape[0]), min(img_a.shape[1], img_b.shape[1])
+        img_a, img_b = img_a[:h, :w], img_b[:h, :w]
+    return _ssim_numpy(img_a, img_b)
+
+
+def _ssim_numpy(img1: np.ndarray, img2: np.ndarray, L: float = 255.0) -> float:
+    """Standard SSIM with local 11x11 Gaussian window statistics."""
+    K1, K2 = 0.01, 0.03
+    C1, C2 = (K1 * L) ** 2, (K2 * L) ** 2
+
+    window = _gaussian_window(11, 1.5)
+    window = window / window.sum()
+
+    mu1 = _convolve2d(img1, window, mode="valid")
+    mu2 = _convolve2d(img2, window, mode="valid")
+    mu1_sq = mu1 * mu1
+    mu2_sq = mu2 * mu2
+    mu1_mu2 = mu1 * mu2
+
+    sigma1_sq = _convolve2d(img1 * img1, window, mode="valid") - mu1_sq
+    sigma2_sq = _convolve2d(img2 * img2, window, mode="valid") - mu2_sq
+    sigma12 = _convolve2d(img1 * img2, window, mode="valid") - mu1_mu2
+
+    numerator = (2 * mu1_mu2 + C1) * (2 * sigma12 + C2)
+    denominator = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    ssim_map = numerator / (denominator + 1e-8)
+
+    return float(np.mean(ssim_map))
+
+
+def _gaussian_window(size: int, sigma: float) -> np.ndarray:
+    """Create 1D Gaussian window, then outer product for 2D."""
+    coords = np.arange(size, dtype=np.float64) - (size - 1) / 2.0
+    g = np.exp(-(coords ** 2) / (2 * sigma ** 2))
+    g /= g.sum()
+    return np.outer(g, g)
+
+
+def _convolve2d(img: np.ndarray, kernel: np.ndarray, mode: str = "valid") -> np.ndarray:
+    """Manual 2D convolution using view-as-windows approach."""
+    kh, kw = kernel.shape
+    ih, iw = img.shape
+    oh, ow = ih - kh + 1, iw - kw + 1
+    if oh <= 0 or ow <= 0:
+        return np.array([[np.mean(img)]])
+    shape = (oh, ow, kh, kw)
+    strides = (img.strides[0], img.strides[1], img.strides[0], img.strides[1])
+    windows = np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
+    return np.tensordot(windows, kernel, axes=((2, 3), (0, 1)))
 
 
 if __name__ == "__main__":

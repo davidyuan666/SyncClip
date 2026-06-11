@@ -150,10 +150,7 @@ class ExperimentRunner:
         preds = []
         vis_embs = []
         aud_embs = []
-        base_accuracy = {
-            "action": 0.95, "documentary": 0.90, "vlog": 0.92,
-            "news": 0.91, "sports": 0.94, "music_video": 0.89, "short_film": 0.88,
-        }.get(genre, 0.90)
+        base_accuracy = 0.92
 
         for ref in refs:
             if rng.random() < base_accuracy:

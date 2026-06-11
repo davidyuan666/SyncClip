@@ -47,4 +47,7 @@ src/evaluation/
 .env
 experiments/data/
 experiments/output/
+experiments/youtube/
+experiments/videos_all/
+*.meta.json
 

@@ -276,7 +276,7 @@ def _scan_video_dir(dir_path: str) -> Dict[str, List[str]]:
     paths: Dict[str, List[str]] = {}
     root = Path(dir_path)
 
-    genres = ["action", "documentary", "vlog", "news", "sports", "music_video", "short_film"]
+    genres = ["vlog"]
     for genre in genres:
         genre_dir = root / genre
         if genre_dir.exists():

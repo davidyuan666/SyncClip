@@ -37,8 +37,7 @@ DIVIDER = "=" * 56
 SUB_DIVIDER = "-" * 56
 
 GENRE_LABELS = {
-    "action": "动作", "documentary": "纪录片", "vlog": "Vlog",
-    "news": "新闻", "sports": "体育", "music_video": "音乐视频", "short_film": "短片",
+    "vlog": "Vlog",
 }
 
 SOURCE_OPTIONS = {
@@ -52,13 +51,7 @@ SOURCE_OPTIONS = {
 }
 
 MIXED_GENRE_SOURCE_MAP: Dict[str, str] = {
-    "action": "youtube",
-    "documentary": "archive",
     "vlog": "youtube",
-    "news": "archive",
-    "sports": "youtube",
-    "music_video": "youtube",
-    "short_film": "archive",
 }
 
 MODE_OPTIONS = {
@@ -234,6 +227,7 @@ def download_videos_by_genre(
     counts: Dict[str, int],
     source: str = "mixed",
     cache_dir: str = "experiments/data",
+    progress_callback = None,
 ) -> Dict[str, List[str]]:
     from experiments.video_downloader import download_videos, GENRE_KEYWORDS, IA_GENRE_KEYWORDS, YtDlpDownloader
 
@@ -263,6 +257,7 @@ def download_videos_by_genre(
         try:
             paths, metas = download_videos(
                 query=query, source=actual_source, count=count, cache_dir=cache_dir,
+                progress_callback=progress_callback,
             )
             if paths:
                 for g, plist in paths.items():

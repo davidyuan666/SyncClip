@@ -270,7 +270,7 @@ CONSTRAINTS:
 class LLMPlanner:
     """Generates structured edit decisions using LLM."""
 
-    def __init__(self, model: str = "deepseek-v4-pro", seed: int = 42):
+    def __init__(self, model: str = "gpt-4-mini", seed: int = 42):
         self.model = model
         self.rng = np.random.default_rng(seed)
         self._client = None
@@ -368,6 +368,10 @@ Fix the errors and return a corrected plan. Output ONLY the corrected JSON.
             ))
             current_time += dur
 
+        selected = self._apply_swap_refinement(
+            selected, sorted_segs, target_duration, delta_gap=0.50,
+        )
+
         has_speech = any(seg.speech_presence for seg in candidates.segments
                          if seg.segment_id in {s.segment_id for s in selected})
         has_narration = "voice" in user_request.lower() or "narrat" in user_request.lower()
@@ -389,6 +393,70 @@ Fix the errors and return a corrected plan. Output ONLY the corrected JSON.
             render_backend="ffmpeg",
             notes=f"Mock plan: {len(selected)} segments, {current_time:.1f}s total",
         )
+
+    def _apply_swap_refinement(
+        self, selected: List[EditSegment], candidates: List,
+        target_duration: float, delta_gap: float = 0.50,
+    ) -> List[EditSegment]:
+        """Paper: greedy ranking + local swap refinement.
+
+        One-pass swap: for each unselected candidate, if replacing a selected
+        segment increases total objective (importance) while maintaining duration
+        and gap constraints, perform the swap.
+        """
+        selected_ids = {s.segment_id for s in selected}
+        unselected = [
+            c for c in candidates
+            if c.segment_id not in selected_ids and c.importance_score > 0
+        ]
+        if not selected or not unselected:
+            return selected
+
+        selected_total = sum(s.importance for s in selected)
+
+        improved = True
+        while improved:
+            improved = False
+            for unsel in unselected:
+                best_gain = 0.0
+                best_sel_idx = -1
+                for i, sel in enumerate(selected):
+                    dur_old = sel.target_end - sel.target_start
+                    dur_new = min(unsel.duration_s, dur_old)
+                    if dur_new <= 0.5:
+                        continue
+                    gain = unsel.importance_score - sel.importance
+                    if gain > best_gain:
+                        best_gain = gain
+                        best_sel_idx = i
+
+                if best_sel_idx >= 0:
+                    old = selected[best_sel_idx]
+                    dur_new = min(unsel.duration_s, old.target_end - old.target_start)
+                    t_start = old.target_start
+                    t_end = round(t_start + dur_new, 2)
+                    selected[best_sel_idx] = EditSegment(
+                        segment_id=unsel.segment_id,
+                        source_start=unsel.start_s,
+                        source_end=unsel.start_s + dur_new,
+                        target_start=t_start,
+                        target_end=t_end,
+                        transition="cut",
+                        sync_anchor=SyncAnchor(
+                            video_time=round(unsel.start_s + dur_new / 2, 2),
+                            audio_time=round(unsel.start_s + dur_new / 2, 2),
+                        ),
+                        importance=unsel.importance_score,
+                    )
+                    selected_ids = {s.segment_id for s in selected}
+                    unselected = [
+                        c for c in candidates
+                        if c.segment_id not in selected_ids and c.importance_score > 0
+                    ]
+                    improved = True
+                    break
+
+        return selected
 
     def _mock_revise(self, plan: EditDecision, errors: List[str]) -> EditDecision:
         plan.notes += f" [REVISED_v{plan.revision_count + 1}]"

@@ -76,9 +76,12 @@ class CandidateSet:
 class CandidateBuilder:
     """
     Groups keyframes into visual segments and computes importance scores.
+
+    Implements the paper's greedy ranking approach for segment selection.
+    Defaults match Table 1 in the paper: theta=0.18, delta=0.50s.
     """
 
-    def __init__(self, theta: float = 0.65, delta_min_gap: float = 2.0,
+    def __init__(self, theta: float = 0.18, delta_min_gap: float = 0.50,
                  min_segment_duration: float = 1.0, seed: int = 42):
         self.theta = theta
         self.delta_min_gap = delta_min_gap
@@ -167,13 +170,12 @@ class CandidateBuilder:
                 emb_var = 0.0
             has_event = emb_var > 0.05
 
-            # Importance score: weighted combination
+            # Importance score: w_i = 0.5*r_i + 0.3*v_i + 0.2*a_i (paper Table 1)
+            audio_cue = 0.5 * float(has_speech) + 0.5 * float(has_event)
             importance = (
-                0.35 * seg_change +
-                0.25 * request_sim +
-                0.15 * has_speech +
-                0.15 * has_event +
-                0.10 * min(duration / 30.0, 1.0)
+                0.50 * request_sim +
+                0.30 * seg_change +
+                0.20 * audio_cue
             )
 
             # Segment visual embedding (mean of constituent frames)

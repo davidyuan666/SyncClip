@@ -7,8 +7,7 @@ Integrates directly with the SyncCLIPAgent experiment pipeline:
 
 Usage:
     python -m experiments.run_all --url "https://pexels.com/video/..." --mock
-    python -m experiments.run_all --search "action sports" --source pexels --count 5
-    python -m experiments.run_all --search "documentary" --source pixabay --count 3 --download-only
+    python -m experiments.run_all --search "vlog daily" --source pexels --count 5
 """
 from __future__ import annotations
 
@@ -25,30 +24,20 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Callable
 
+import yt_dlp
 import requests
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_DIR = Path(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "experiments", "data"))
 
 GENRE_KEYWORDS: Dict[str, List[str]] = {
-    "action": ["action", "fight", "explosion", "chase", "racing", "sport", "parkour", "stunt", "battle"],
-    "documentary": ["documentary", "nature", "wildlife", "history", "science", "education", "interview"],
     "vlog": ["vlog", "daily", "routine", "lifestyle", "tutorial", "review", "unboxing", "blog"],
-    "news": ["news", "report", "headline", "breaking", "journalist", "anchor", "broadcast", "press"],
-    "sports": ["sports", "football", "basketball", "soccer", "tennis", "swimming", "game", "match", "athlete"],
-    "music_video": ["music", "song", "dance", "band", "concert", "performance", "lyric", "mv", "official video"],
-    "short_film": ["short film", "cinematic", "story", "drama", "narrative", "fiction", "art film", "experimental"],
 }
 
 IA_GENRE_KEYWORDS: Dict[str, List[str]] = {
-    "action": ["action", "chase", "racing", "stunt", "battle", "martial arts", "fight"],
-    "documentary": ["documentary", "nature", "wildlife", "science education", "historical", "travelogue"],
     "vlog": ["vlog", "daily life", "tutorial", "review", "how to", "diy"],
-    "news": ["newsreel", "news broadcast", "television news", "press conference", "news report"],
-    "sports": ["sports", "football", "basketball", "olympic", "match", "athletics", "game"],
-    "music_video": ["music performance", "concert", "music video", "band", "orchestra", "song"],
-    "short_film": ["short film", "independent film", "experimental film", "silent film", "animated short"],
 }
 
 _USER_AGENT = (
@@ -71,14 +60,7 @@ def _sanitize_filename(name: str, max_len: int = 80) -> str:
 
 
 def _classify_genre(title: str, tags: Optional[List[str]] = None) -> str:
-    text = (title + " " + " ".join(tags or [])).lower()
-    scores = {}
-    for genre, keywords in GENRE_KEYWORDS.items():
-        score = sum(1 for kw in keywords if kw in text)
-        scores[genre] = score
-    if max(scores.values()) == 0:
-        return "vlog"
-    return max(scores, key=scores.get)
+    return "vlog"
 
 
 def _check_ytdlp() -> bool:
@@ -146,13 +128,7 @@ class YtDlpDownloader(VideoSource):
     }
 
     BILIBILI_GENRE_KEYWORDS: Dict[str, List[str]] = {
-        "action": ["动作", "打斗", "赛车", "跑酷", "特技", "格斗", "追逐"],
-        "documentary": ["纪录片", "自然", "野生动物", "历史", "科学", "教育", "采访"],
         "vlog": ["vlog", "日常", "生活", "教程", "测评", "开箱", "博客"],
-        "news": ["新闻", "报道", "头条", "记者", "广播"],
-        "sports": ["体育", "足球", "篮球", "网球", "游泳", "比赛", "运动"],
-        "music_video": ["音乐", "MV", "舞蹈", "乐队", "演唱会", "表演", "歌曲"],
-        "short_film": ["短片", "微电影", "剧情", "故事", "叙事", "实验电影"],
     }
 
     def __init__(self, cache_dir: str = "", platform: str = "youtube"):
@@ -181,21 +157,51 @@ class YtDlpDownloader(VideoSource):
         hash_id = _url_hash(url)
         output_template = str(output_dir / f"{hash_id}.%(ext)s")
 
+        pbar = None
         try:
-            download_cmd = [
-                sys.executable, "-m", "yt_dlp",
-                "--format", "best[height<=720][ext=mp4]/best[height<=720]/best",
-                "--output", output_template,
-                "--merge-output-format", "mp4",
-                "--no-playlist",
-                "--socket-timeout", "30",
-                "--retries", "3",
-                url,
-            ]
-            result = subprocess.run(download_cmd, capture_output=True, text=True, timeout=600)
-            if result.returncode != 0:
-                logger.error(f"[{self.source_name}] Download failed: {result.stderr[:500]}")
-                return None
+            def _progress_hook(d):
+                nonlocal pbar
+                if d['status'] == 'downloading':
+                    if pbar is None:
+                        total = d.get('total_bytes') or d.get('total_bytes_estimate') or None
+                        pbar = tqdm(
+                            total=total, unit='B', unit_scale=True, unit_divisor=1024,
+                            desc=f"[{self.source_name}]", leave=False, file=sys.stdout,
+                        )
+                    downloaded = d.get('downloaded_bytes', 0)
+                    if downloaded > pbar.n:
+                        total = d.get('total_bytes') or d.get('total_bytes_estimate')
+                        if total and total > (pbar.total or 0):
+                            pbar.total = total
+                        pbar.n = downloaded
+                        pbar.set_postfix_str(
+                            f"{d.get('_speed_str', '')} ETA {d.get('_eta_str', '')}"
+                        )
+                        pbar.refresh()
+                elif d['status'] == 'finished':
+                    if pbar is not None:
+                        pbar.n = pbar.total or 0
+                        pbar.refresh()
+                        pbar.close()
+                        pbar = None
+
+            ydl_opts = {
+                'format': 'best[height<=720][ext=mp4]/best[height<=720]/best',
+                'outtmpl': output_template,
+                'merge_output_format': 'mp4',
+                'noplaylist': True,
+                'socket_timeout': 30,
+                'retries': 3,
+                'progress_hooks': [_progress_hook],
+                'quiet': True,
+                'no_warnings': True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                if info is None:
+                    logger.error(f"[{self.source_name}] Failed to extract info for: {url}")
+                    return None
 
             actual_path = None
             for ext in [".mp4", ".mkv", ".webm"]:
@@ -216,24 +222,9 @@ class YtDlpDownloader(VideoSource):
                 shutil.move(str(actual_path), str(new_path))
                 actual_path = new_path
 
-            meta_cmd = [
-                sys.executable, "-m", "yt_dlp",
-                "--print", "title",
-                "--print", "duration",
-                "--print", "thumbnail",
-                "--skip-download",
-                "--no-playlist",
-                url,
-            ]
-            meta_result = subprocess.run(meta_cmd, capture_output=True, text=True, timeout=30)
-            lines = [l.strip() for l in meta_result.stdout.strip().split("\n") if l.strip()]
-            title = lines[0] if lines else url
-            duration = 0.0
-            try:
-                duration = float(lines[1]) if len(lines) > 1 else 0.0
-            except (ValueError, TypeError):
-                pass
-            thumbnail = lines[2] if len(lines) > 2 else ""
+            title = info.get('title', url)
+            duration = info.get('duration', 0) or 0
+            thumbnail = info.get('thumbnail', '')
 
             genre = _classify_genre(title)
             meta = {
@@ -245,12 +236,12 @@ class YtDlpDownloader(VideoSource):
             logger.info(f"[{self.source_name}] Downloaded: {title[:60]} -> {actual_path}")
             return meta
 
-        except subprocess.TimeoutExpired:
-            logger.error(f"[{self.source_name}] Timeout for: {url}")
-            return None
         except Exception as e:
             logger.error(f"[{self.source_name}] Error: {e}")
             return None
+        finally:
+            if pbar is not None:
+                pbar.close()
 
     def search(self, query: str, count: int = 5, **kwargs) -> List[str]:
         if not _check_ytdlp():
@@ -355,9 +346,14 @@ class PexelsDownloader(VideoSource):
 
             dl_resp = self._session.get(download_url, timeout=120, stream=True)
             dl_resp.raise_for_status()
-            with open(cache_path, "wb") as f:
-                for chunk in dl_resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            total = int(dl_resp.headers.get('content-length', 0))
+            with tqdm(total=total, unit='B', unit_scale=True, unit_divisor=1024,
+                      desc=title[:30], leave=False, file=sys.stdout) as file_pbar:
+                with open(cache_path, "wb") as f:
+                    for chunk in dl_resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                        if total:
+                            file_pbar.update(len(chunk))
 
             genre = _classify_genre(title, tags)
             meta = {
@@ -500,9 +496,14 @@ class PixabayDownloader(VideoSource):
 
         dl_resp = self._session.get(download_url, timeout=120, stream=True)
         dl_resp.raise_for_status()
-        with open(cache_path, "wb") as f:
-            for chunk in dl_resp.iter_content(chunk_size=8192):
-                f.write(chunk)
+        total = int(dl_resp.headers.get('content-length', 0))
+        with tqdm(total=total, unit='B', unit_scale=True, unit_divisor=1024,
+                  desc=title[:30], leave=False, file=sys.stdout) as file_pbar:
+            with open(cache_path, "wb") as f:
+                for chunk in dl_resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    if total:
+                        file_pbar.update(len(chunk))
 
         genre = _classify_genre(title, tags)
         meta = {
@@ -689,9 +690,14 @@ def download_videos(
     count: int = 5,
     api_keys: Optional[Dict[str, str]] = None,
     cache_dir: str = "",
+    progress_callback: Optional[Callable[[int, int, Optional[Dict]], bool]] = None,
 ) -> Tuple[Dict[str, List[str]], List[Dict]]:
     """
     Download videos from URLs or search query.
+
+    Args:
+        progress_callback: Called after each download with (index, total, meta).
+            Return False to stop downloading further videos.
 
     Returns:
         video_paths: {genre: [path1, path2, ...]}
@@ -714,7 +720,8 @@ def download_videos(
     if not urls:
         return {}, []
 
-    for url in urls:
+    total = len(urls)
+    for i, url in enumerate(tqdm(urls, desc="Videos", unit="vid", file=sys.stdout)):
         dl = get_downloader(url=url, source=source, api_keys=api_keys, cache_dir=cd)
         if not dl:
             logger.warning(f"No downloader for: {url}")
@@ -725,6 +732,10 @@ def download_videos(
             metas.append(meta)
         else:
             logger.warning(f"Failed to download: {url}")
+
+        if progress_callback and not progress_callback(i, total, meta):
+            logger.info(f"Download stopped by user at {i + 1}/{total}")
+            break
 
     video_paths: Dict[str, List[str]] = {}
     for meta in metas:
