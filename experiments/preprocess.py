@@ -230,6 +230,7 @@ class VideoPreprocessor:
         frames_dir = work_dir / f"frames_{fps}fps"
         frames_dir.mkdir(parents=True, exist_ok=True)
 
+        logger.info(f"    ffmpeg: extracting frames @{fps}fps, duration={duration_s:.0f}s...")
         try:
             import ffmpeg
             out_pattern = str(frames_dir / f"frame_%05d.jpg")
@@ -247,6 +248,7 @@ class VideoPreprocessor:
         interval = 1.0 / fps
         for i, fp in enumerate(frame_files):
             keyframes.append(Keyframe(frame_idx=i, timestamp_s=round(i * interval, 3), path=str(fp)))
+        logger.info(f"    ffmpeg: extracted {len(keyframes)} frames @{fps}fps")
         return keyframes
 
     def _extract_audio(self, video_path: str, work_dir: Path) -> str:

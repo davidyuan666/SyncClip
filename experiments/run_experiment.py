@@ -74,7 +74,7 @@ class EndToEndRunner:
         video_id = video_id or Path(video_path).stem
         request_id = request_id or f"req_{video_id[:8]}"
         user_request = user_request or "Create an engaging highlight video from the most important moments."
-        fps_options = fps_options or [1, 2, 3, 5]
+        fps_options = fps_options or [5]
 
         timing = {}
         logger.info(f"=== [{video_id}] Starting end-to-end pipeline ===")
@@ -82,7 +82,7 @@ class EndToEndRunner:
         # 1. Preprocess
         logger.info(f"  [{video_id}] [1/8] Preprocessing frames (ffmpeg)...")
         t = time.time()
-        preprocess = self.preprocessor.process(video_path, video_id, fps_options, mock=mock)
+        preprocess = self.preprocessor.process(video_path, video_id, fps_options, mock=mock, apply_ssim=False)
         timing["preprocess_s"] = round(time.time() - t, 2)
         logger.info(f"  [{video_id}] [1/8] done: {len(preprocess.keyframes.get(5, []))} frames @5fps ({timing['preprocess_s']}s)")
 
