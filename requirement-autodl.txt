@@ -5,4 +5,4 @@
 openai>=1.0.0
 openai-whisper>=20231117
 ffmpeg-python>=0.2.0
-transformers>=4.45,<5.0
+transformers>=4.44,<4.45
