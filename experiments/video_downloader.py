@@ -41,6 +41,16 @@ GENRE_KEYWORDS: Dict[str, List[str]] = {
     "short_film": ["short film", "cinematic", "story", "drama", "narrative", "fiction", "art film", "experimental"],
 }
 
+IA_GENRE_KEYWORDS: Dict[str, List[str]] = {
+    "action": ["action", "chase", "racing", "stunt", "battle", "martial arts", "fight"],
+    "documentary": ["documentary", "nature", "wildlife", "science education", "historical", "travelogue"],
+    "vlog": ["vlog", "daily life", "tutorial", "review", "how to", "diy"],
+    "news": ["newsreel", "news broadcast", "television news", "press conference", "news report"],
+    "sports": ["sports", "football", "basketball", "olympic", "match", "athletics", "game"],
+    "music_video": ["music performance", "concert", "music video", "band", "orchestra", "song"],
+    "short_film": ["short film", "independent film", "experimental film", "silent film", "animated short"],
+}
+
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
@@ -162,15 +172,17 @@ class YtDlpDownloader(VideoSource):
         cache_path = self._get_cache_path(url)
         cached = self._is_cached(url)
         if cached:
-            logger.info(f"[ytdlp] Using cached: {cached}")
+            logger.info(f"[{self.source_name}] Using cached: {cached}")
             return self._load_cached_meta(cached, url)
 
         output_dir = Path(output_dir or (self.cache_dir / self.source_name))
+        output_dir = output_dir.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_template = str(output_dir / f"{_url_hash(url)}.%(ext)s")
+        hash_id = _url_hash(url)
+        output_template = str(output_dir / f"{hash_id}.%(ext)s")
 
         try:
-            cmd = [
+            download_cmd = [
                 sys.executable, "-m", "yt_dlp",
                 "--format", "best[height<=720][ext=mp4]/best[height<=720]/best",
                 "--output", output_template,
@@ -178,54 +190,66 @@ class YtDlpDownloader(VideoSource):
                 "--no-playlist",
                 "--socket-timeout", "30",
                 "--retries", "3",
-                "--print", "title",
-                "--print", "duration",
-                "--print", "thumbnail",
                 url,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            result = subprocess.run(download_cmd, capture_output=True, text=True, timeout=600)
             if result.returncode != 0:
-                logger.error(f"[ytdlp] Download failed: {result.stderr[:500]}")
+                logger.error(f"[{self.source_name}] Download failed: {result.stderr[:500]}")
                 return None
-
-            lines = [l.strip() for l in result.stdout.strip().split("\n") if l.strip()]
-            title = lines[0] if lines else url
-            duration = float(lines[1]) if len(lines) > 1 else 0.0
-            thumbnail = lines[2] if len(lines) > 2 else ""
 
             actual_path = None
             for ext in [".mp4", ".mkv", ".webm"]:
-                candidate = output_dir / f"{_url_hash(url)}{ext}"
+                candidate = output_dir / f"{hash_id}{ext}"
                 if candidate.exists():
                     actual_path = candidate
                     break
             if not actual_path:
-                matches = list(output_dir.glob(f"{_url_hash(url)}*"))
-                actual_path = matches[0] if matches else Path(output_template.replace("%(ext)s", "mp4"))
-
+                matches = list(output_dir.glob(f"{hash_id}*"))
+                if matches:
+                    actual_path = matches[0]
             if not actual_path or not actual_path.exists():
+                logger.error(f"[{self.source_name}] Output file not found after download")
                 return None
 
-            if not actual_path.suffix == ".mp4":
+            if actual_path.suffix != ".mp4":
                 new_path = actual_path.with_suffix(".mp4")
                 shutil.move(str(actual_path), str(new_path))
                 actual_path = new_path
 
+            meta_cmd = [
+                sys.executable, "-m", "yt_dlp",
+                "--print", "title",
+                "--print", "duration",
+                "--print", "thumbnail",
+                "--skip-download",
+                "--no-playlist",
+                url,
+            ]
+            meta_result = subprocess.run(meta_cmd, capture_output=True, text=True, timeout=30)
+            lines = [l.strip() for l in meta_result.stdout.strip().split("\n") if l.strip()]
+            title = lines[0] if lines else url
+            duration = 0.0
+            try:
+                duration = float(lines[1]) if len(lines) > 1 else 0.0
+            except (ValueError, TypeError):
+                pass
+            thumbnail = lines[2] if len(lines) > 2 else ""
+
             genre = _classify_genre(title)
             meta = {
                 "path": str(actual_path), "url": url, "title": title,
-                "duration": duration, "genre": genre, "source": "ytdlp",
+                "duration": duration, "genre": genre, "source": self.source_name,
                 "thumbnail": thumbnail,
             }
             self._save_meta(actual_path, meta)
-            logger.info(f"[ytdlp] Downloaded: {title[:60]} -> {actual_path}")
+            logger.info(f"[{self.source_name}] Downloaded: {title[:60]} -> {actual_path}")
             return meta
 
         except subprocess.TimeoutExpired:
-            logger.error(f"[ytdlp] Timeout for: {url}")
+            logger.error(f"[{self.source_name}] Timeout for: {url}")
             return None
         except Exception as e:
-            logger.error(f"[ytdlp] Error: {e}")
+            logger.error(f"[{self.source_name}] Error: {e}")
             return None
 
     def search(self, query: str, count: int = 5, **kwargs) -> List[str]:
@@ -553,61 +577,45 @@ class InternetArchiveDownloader(VideoSource):
         if not identifier:
             return None
 
+        title = identifier
+        tags: List[str] = []
+        duration = 0.0
+
         try:
             metadata_url = f"https://archive.org/metadata/{identifier}"
             resp = self._session.get(metadata_url, timeout=30)
             resp.raise_for_status()
             metadata = resp.json()
-
-            title = _sanitize_filename(
-                metadata.get("metadata", {}).get("title", identifier) or identifier
-            )
-            files = metadata.get("files", [])
-
-            mp4_files = [f for f in files if f.get("name", "").endswith(".mp4")]
-            if not mp4_files:
-                mp4_files = [f for f in files if f.get("format") == "MPEG4"]
-            if not mp4_files:
-                if _check_ytdlp():
-                    fallback = YtDlpDownloader(str(self.cache_dir.parent))
-                    return fallback.download(url)
-                return None
-
-            video_file = min(mp4_files, key=lambda f: int(f.get("size", 0) or 0) * -1)
-            if int(video_file.get("size", 0)) > 500 * 1024 * 1024:
-                video_file = sorted(mp4_files, key=lambda f: int(f.get("size", 0) or 0))[0]
-
-            download_url = f"https://archive.org/download/{identifier}/{video_file['name']}"
-
-            cache_path = self._get_cache_path(url)
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-
-            dl_resp = self._session.get(download_url, timeout=300, stream=True)
-            dl_resp.raise_for_status()
-            with open(cache_path, "wb") as f:
-                for chunk in dl_resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-
-            subjects = metadata.get("metadata", {}).get("subject", [])
+            meta_info = metadata.get("metadata", {})
+            title = _sanitize_filename(meta_info.get("title", identifier) or identifier)
+            raw_runtime = meta_info.get("runtime", 0) or 0
+            try:
+                duration = float(raw_runtime)
+            except (ValueError, TypeError):
+                duration = 0.0
+            subjects = meta_info.get("subject", [])
             tags = [subjects] if isinstance(subjects, str) else subjects
-            genre = _classify_genre(title, tags)
-
-            meta = {
-                "path": str(cache_path), "url": url, "title": title,
-                "duration": float(metadata.get("metadata", {}).get("runtime", 0) or 0),
-                "genre": genre, "source": "archive",
-                "tags": tags,
-            }
-            self._save_meta(cache_path, meta)
-            logger.info(f"[archive] Downloaded: {title[:60]} -> {cache_path}")
-            return meta
-
         except Exception as e:
-            logger.error(f"[archive] Error: {e}")
-            if _check_ytdlp():
-                fallback = YtDlpDownloader(str(self.cache_dir.parent))
-                return fallback.download(url)
-            return None
+            logger.warning(f"[archive] Metadata lookup failed: {e}")
+
+        if _check_ytdlp():
+            fallback = YtDlpDownloader(str(self.cache_dir), platform="archive")
+            meta = fallback.download(url)
+            if meta:
+                meta["genre"] = _classify_genre(title, tags)
+                meta["title"] = title
+                meta["duration"] = duration
+                meta["tags"] = tags
+                logger.info(f"[archive] Downloaded: {title[:60]} -> {meta['path']}")
+                return meta
+
+        return None
+
+    def _fallback_ytdlp(self, url: str) -> Optional[Dict]:
+        if _check_ytdlp():
+            fallback = YtDlpDownloader(str(self.cache_dir.parent))
+            return fallback.download(url)
+        return None
 
     def search(self, query: str, count: int = 5, **kwargs) -> List[str]:
         try:

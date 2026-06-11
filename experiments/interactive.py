@@ -42,11 +42,12 @@ GENRE_LABELS = {
 }
 
 SOURCE_OPTIONS = {
-    "1": ("bilibili", "Bilibili/B站 (完全免费, 无需API Key, 国内高速)"),
-    "2": ("youtube", "YouTube (完全免费, yt-dlp搜索下载)"),
-    "3": ("pexels", "Pexels (需免费注册API Key)"),
-    "4": ("pixabay", "Pixabay (需API Key, 速率限制较高)"),
-    "5": ("skip", "跳过下载，使用已有视频"),
+    "1": ("archive", "Internet Archive (公版/CC0, 无需API Key, 学术安全) [已验证]"),
+    "2": ("youtube", "YouTube (yt-dlp, 需代理, 资源最丰富) [已验证]"),
+    "3": ("bilibili", "Bilibili/B站 (当前不可用: API 412认证限制)"),
+    "4": ("pexels", "Pexels (需免费注册API Key)"),
+    "5": ("pixabay", "Pixabay (需API Key)"),
+    "6": ("skip", "跳过下载，使用已有视频"),
 }
 
 MODE_OPTIONS = {
@@ -217,13 +218,15 @@ def download_videos_by_genre(
     source: str = "bilibili",
     cache_dir: str = "experiments/data",
 ) -> Dict[str, List[str]]:
-    from experiments.video_downloader import download_videos, GENRE_KEYWORDS, YtDlpDownloader
+    from experiments.video_downloader import download_videos, GENRE_KEYWORDS, IA_GENRE_KEYWORDS, YtDlpDownloader
 
     video_paths: Dict[str, List[str]] = {}
     total = sum(counts.values())
 
     if source == "bilibili":
         keywords_map = YtDlpDownloader.BILIBILI_GENRE_KEYWORDS
+    elif source == "archive":
+        keywords_map = IA_GENRE_KEYWORDS
     else:
         keywords_map = GENRE_KEYWORDS
 
