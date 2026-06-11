@@ -16,8 +16,8 @@ class LLMUtil:
         self.vision_model = "gpt-4-vision-preview"
         _raw_base_url = os.getenv("API_BASE_URL", "")
         self.api_base_url = _raw_base_url.rstrip('/') if _raw_base_url else ""
-        self.model = os.getenv("MODEL", "deepseek-v4-pro")
-        self.struct_model = os.getenv("STRUCT_MODEL", "deepseek-v4-pro")
+        self.model = os.getenv("MODEL", "deepseek-v4-flash")
+        self.struct_model = os.getenv("STRUCT_MODEL", "deepseek-v4-flash")
         self.whisper_model = None
         self.whisper_model_size = os.getenv("WHISPER_MODEL_SIZE")
 
