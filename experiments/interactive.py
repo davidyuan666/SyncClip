@@ -42,12 +42,23 @@ GENRE_LABELS = {
 }
 
 SOURCE_OPTIONS = {
-    "1": ("archive", "Internet Archive (公版/CC0, 无需API Key, 学术安全) [已验证]"),
-    "2": ("youtube", "YouTube (yt-dlp, 需代理, 资源最丰富) [已验证]"),
-    "3": ("bilibili", "Bilibili/B站 (当前不可用: API 412认证限制)"),
-    "4": ("pexels", "Pexels (需免费注册API Key)"),
-    "5": ("pixabay", "Pixabay (需API Key)"),
-    "6": ("skip", "跳过下载，使用已有视频"),
+    "1": ("mixed", "混合模式 (推荐: YouTube+Internet Archive 按类别自动分流)"),
+    "2": ("archive", "Internet Archive (公版/CC0, 免API, 学术安全) [已验证]"),
+    "3": ("youtube", "YouTube (yt-dlp, 需代理, 资源最丰富) [已验证]"),
+    "4": ("bilibili", "Bilibili/B站 (当前不可用: API 412认证限制)"),
+    "5": ("pexels", "Pexels (需免费注册API Key)"),
+    "6": ("pixabay", "Pixabay (需API Key)"),
+    "7": ("skip", "跳过下载，使用已有视频"),
+}
+
+MIXED_GENRE_SOURCE_MAP: Dict[str, str] = {
+    "action": "youtube",
+    "documentary": "archive",
+    "vlog": "youtube",
+    "news": "archive",
+    "sports": "youtube",
+    "music_video": "youtube",
+    "short_film": "archive",
 }
 
 MODE_OPTIONS = {
@@ -200,7 +211,8 @@ def print_summary(
     key_display = _mask_key(api_key) if api_key else "N/A"
 
     source_label = {"pexels": "Pexels", "pixabay": "Pixabay", "skip": "跳过下载",
-                    "bilibili": "Bilibili/B站", "youtube": "YouTube"}.get(source, source)
+                    "bilibili": "Bilibili/B站", "youtube": "YouTube", "archive": "Internet Archive",
+                    "mixed": "混合模式 (IA+YouTube)"}.get(source, source)
     mode_label = {"mock": "Mock 模式 (快速验证)", "real": "真实模式"}.get(mode, mode)
     total = sum(counts.values())
 
@@ -208,6 +220,11 @@ def print_summary(
     print(f"  视频源:       {source_label}")
     print(f"  总视频数:     {total}")
     print(f"  各类型数量:   {dict((GENRE_LABELS.get(g, g), c) for g, c in counts.items() if c > 0)}")
+    if source == "mixed":
+        ia_genres = [GENRE_LABELS.get(g, g) for g in counts if MIXED_GENRE_SOURCE_MAP.get(g) == "archive" and counts[g] > 0]
+        yt_genres = [GENRE_LABELS.get(g, g) for g in counts if MIXED_GENRE_SOURCE_MAP.get(g) == "youtube" and counts[g] > 0]
+        print(f"    IA 负责:     {', '.join(ia_genres) if ia_genres else '(无)'}")
+        print(f"    YT 负责:     {', '.join(yt_genres) if yt_genres else '(无)'}")
     print(f"  运行模式:     {mode_label}")
     print(f"  输出目录:     {output_dir}")
     print(DIVIDER)
@@ -215,7 +232,7 @@ def print_summary(
 
 def download_videos_by_genre(
     counts: Dict[str, int],
-    source: str = "bilibili",
+    source: str = "mixed",
     cache_dir: str = "experiments/data",
 ) -> Dict[str, List[str]]:
     from experiments.video_downloader import download_videos, GENRE_KEYWORDS, IA_GENRE_KEYWORDS, YtDlpDownloader
@@ -223,24 +240,29 @@ def download_videos_by_genre(
     video_paths: Dict[str, List[str]] = {}
     total = sum(counts.values())
 
-    if source == "bilibili":
-        keywords_map = YtDlpDownloader.BILIBILI_GENRE_KEYWORDS
-    elif source == "archive":
-        keywords_map = IA_GENRE_KEYWORDS
-    else:
-        keywords_map = GENRE_KEYWORDS
-
     for genre, count in counts.items():
         if count <= 0:
             continue
 
+        if source == "mixed":
+            actual_source = MIXED_GENRE_SOURCE_MAP.get(genre, "youtube")
+        else:
+            actual_source = source
+
+        if actual_source == "archive":
+            keywords_map = IA_GENRE_KEYWORDS
+        elif actual_source == "bilibili":
+            keywords_map = YtDlpDownloader.BILIBILI_GENRE_KEYWORDS
+        else:
+            keywords_map = GENRE_KEYWORDS
+
         keywords = keywords_map.get(genre, [genre])
         query = " ".join(keywords[:3])
-        logger.info(f"[{genre}] 搜索: '{query}' × {count} (source={source})")
+        logger.info(f"[{genre}] 搜索: '{query}' x {count} (source={actual_source})")
 
         try:
             paths, metas = download_videos(
-                query=query, source=source, count=count, cache_dir=cache_dir,
+                query=query, source=actual_source, count=count, cache_dir=cache_dir,
             )
             if paths:
                 for g, plist in paths.items():
@@ -346,8 +368,12 @@ def run(args: argparse.Namespace) -> None:
 
     if source != "skip":
         logger.info("--- 下载视频 ---")
-        download_root = os.path.join(config.dataset_dir, source)
+        download_root = config.dataset_dir if source == "mixed" else os.path.join(config.dataset_dir, source)
         video_paths = download_videos_by_genre(counts, source=source, cache_dir=download_root)
+        if source == "mixed":
+            ia_count = sum(c for g, c in counts.items() if MIXED_GENRE_SOURCE_MAP.get(g) == "archive")
+            yt_count = sum(counts.values()) - ia_count
+            logger.info(f"混合分流: Internet Archive={ia_count}, YouTube={yt_count}")
     else:
         for genre in config.genre_list:
             genre_dir = Path(config.dataset_dir) / source or Path(config.dataset_dir)
