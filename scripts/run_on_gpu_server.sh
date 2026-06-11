@@ -34,6 +34,11 @@ echo "  CUDA: $CUDA_VER"
 
 export HF_ENDPOINT=https://hf-mirror.com
 
+# ——— Install missing dependencies ———
+echo ""
+echo "=== Dependencies ==="
+pip install -r requirement-autodl.txt --system -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || true
+
 export SYNCCLIP_GPU="$GPU_NAME"
 export SYNCCLIP_GPU_MEMORY_GB="$GPU_MEM_GB"
 export SYNCCLIP_RAM_GB="$RAM_GB"
