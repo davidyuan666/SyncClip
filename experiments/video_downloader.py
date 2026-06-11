@@ -130,8 +130,24 @@ class YtDlpDownloader(VideoSource):
         "dailymotion.com", "twitch.tv", "nicovideo.jp",
     ]
 
-    def __init__(self, cache_dir: str = ""):
-        super().__init__(cache_dir, source_name="ytdlp")
+    SEARCH_PREFIX = {
+        "youtube": "ytsearch",
+        "bilibili": "bilisearch",
+    }
+
+    BILIBILI_GENRE_KEYWORDS: Dict[str, List[str]] = {
+        "action": ["动作", "打斗", "赛车", "跑酷", "特技", "格斗", "追逐"],
+        "documentary": ["纪录片", "自然", "野生动物", "历史", "科学", "教育", "采访"],
+        "vlog": ["vlog", "日常", "生活", "教程", "测评", "开箱", "博客"],
+        "news": ["新闻", "报道", "头条", "记者", "广播"],
+        "sports": ["体育", "足球", "篮球", "网球", "游泳", "比赛", "运动"],
+        "music_video": ["音乐", "MV", "舞蹈", "乐队", "演唱会", "表演", "歌曲"],
+        "short_film": ["短片", "微电影", "剧情", "故事", "叙事", "实验电影"],
+    }
+
+    def __init__(self, cache_dir: str = "", platform: str = "youtube"):
+        super().__init__(cache_dir, source_name=platform)
+        self.platform = platform
 
     def supports(self, url: str) -> bool:
         if not _check_ytdlp():
@@ -216,10 +232,11 @@ class YtDlpDownloader(VideoSource):
         if not _check_ytdlp():
             return []
 
+        prefix = self.SEARCH_PREFIX.get(self.platform, "ytsearch")
         try:
             cmd = [
                 sys.executable, "-m", "yt_dlp",
-                f"ytsearch{count}:{query}",
+                f"{prefix}{count}:{query}",
                 "--get-url",
                 "--no-playlist",
                 "--flat-playlist",
@@ -231,7 +248,7 @@ class YtDlpDownloader(VideoSource):
             urls = [l.strip() for l in result.stdout.strip().split("\n") if l.strip().startswith("http")]
             return urls[:count]
         except Exception as e:
-            logger.error(f"[ytdlp] Search error: {e}")
+            logger.error(f"[{self.source_name}] Search error: {e}")
             return []
 
     def _load_cached_meta(self, cache_path: Path, url: str) -> Optional[Dict]:
@@ -645,7 +662,9 @@ def get_downloader(url: str = "", source: str = "", api_keys: Optional[Dict[str,
         return downloaders[1]
     if source_lower in ("archive", "internetarchive"):
         return downloaders[2]
-    if source_lower == "ytdlp":
+    if source_lower == "bilibili":
+        return YtDlpDownloader(cd, platform="bilibili")
+    if source_lower in ("youtube", "ytdlp"):
         return downloaders[3]
 
     for d in downloaders:

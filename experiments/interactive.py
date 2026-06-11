@@ -42,9 +42,11 @@ GENRE_LABELS = {
 }
 
 SOURCE_OPTIONS = {
-    "1": ("pexels", "Pexels (免费, 无需API Key, 速率限制较低)"),
-    "2": ("pixabay", "Pixabay (需API Key, 速率限制较高)"),
-    "3": ("skip", "跳过下载，使用已有视频"),
+    "1": ("bilibili", "Bilibili/B站 (完全免费, 无需API Key, 国内高速)"),
+    "2": ("youtube", "YouTube (完全免费, yt-dlp搜索下载)"),
+    "3": ("pexels", "Pexels (需免费注册API Key)"),
+    "4": ("pixabay", "Pixabay (需API Key, 速率限制较高)"),
+    "5": ("skip", "跳过下载，使用已有视频"),
 }
 
 MODE_OPTIONS = {
@@ -116,18 +118,23 @@ def step_video_source() -> Tuple[str, Optional[str]]:
         choice = input("\n  请选择 [1]: ").strip() or "1"
         if choice in SOURCE_OPTIONS:
             break
-        print("    请输入 1-3")
+        print(f"    请输入 1-{len(SOURCE_OPTIONS)}")
 
     source, _ = SOURCE_OPTIONS[choice]
 
-    pixabay_key = None
+    extra_key = None
     if source == "pixabay":
         raw = getpass.getpass("  Pixabay API Key: ").strip()
         if raw:
-            pixabay_key = raw
+            extra_key = raw
             os.environ["PIXABAY_API_KEY"] = raw
+    elif source == "pexels":
+        raw = getpass.getpass("  Pexels API Key (留空跳过): ").strip()
+        if raw:
+            extra_key = raw
+            os.environ["PEXELS_API_KEY"] = raw
 
-    return source, pixabay_key
+    return source, extra_key
 
 
 def step_video_counts(current_counts: Dict[str, int]) -> Dict[str, int]:
@@ -191,7 +198,8 @@ def print_summary(
     has_key = "已设置" if api_key else "未设置 (将使用Mock LLM)"
     key_display = _mask_key(api_key) if api_key else "N/A"
 
-    source_label = {"pexels": "Pexels", "pixabay": "Pixabay", "skip": "跳过下载"}.get(source, source)
+    source_label = {"pexels": "Pexels", "pixabay": "Pixabay", "skip": "跳过下载",
+                    "bilibili": "Bilibili/B站", "youtube": "YouTube"}.get(source, source)
     mode_label = {"mock": "Mock 模式 (快速验证)", "real": "真实模式"}.get(mode, mode)
     total = sum(counts.values())
 
@@ -206,21 +214,26 @@ def print_summary(
 
 def download_videos_by_genre(
     counts: Dict[str, int],
-    source: str = "pexels",
+    source: str = "bilibili",
     cache_dir: str = "experiments/data",
 ) -> Dict[str, List[str]]:
-    from experiments.video_downloader import download_videos, GENRE_KEYWORDS
+    from experiments.video_downloader import download_videos, GENRE_KEYWORDS, YtDlpDownloader
 
     video_paths: Dict[str, List[str]] = {}
     total = sum(counts.values())
+
+    if source == "bilibili":
+        keywords_map = YtDlpDownloader.BILIBILI_GENRE_KEYWORDS
+    else:
+        keywords_map = GENRE_KEYWORDS
 
     for genre, count in counts.items():
         if count <= 0:
             continue
 
-        keywords = GENRE_KEYWORDS.get(genre, [genre])
+        keywords = keywords_map.get(genre, [genre])
         query = " ".join(keywords[:3])
-        logger.info(f"[{genre}] 搜索: '{query}' × {count}")
+        logger.info(f"[{genre}] 搜索: '{query}' × {count} (source={source})")
 
         try:
             paths, metas = download_videos(
