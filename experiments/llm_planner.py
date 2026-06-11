@@ -270,7 +270,7 @@ CONSTRAINTS:
 class LLMPlanner:
     """Generates structured edit decisions using LLM."""
 
-    def __init__(self, model: str = "deepseek-chat", seed: int = 42):
+    def __init__(self, model: str = "deepseek-v4-pro", seed: int = 42):
         self.model = model
         self.rng = np.random.default_rng(seed)
         self._client = None
