@@ -44,6 +44,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
+    force=True,
 )
 logger = logging.getLogger("experiments")
 
@@ -304,6 +305,66 @@ def run_cross_modal_projection(config: ExperimentConfig):
     logger.info(f"  Config saved to: {cfg_path}")
 
 
+def run_download_pipeline(
+    config: ExperimentConfig,
+    url: str = "",
+    search_query: str = "",
+    source: str = "pexels",
+    count: int = 5,
+    download_only: bool = False,
+):
+    """Download videos from online sources and optionally run the experiment pipeline."""
+    from experiments.video_downloader import download_videos, download_single
+
+    if url:
+        logger.info(f"Downloading single video: {url}")
+        meta = download_single(url, cache_dir=config.dataset_dir)
+        if meta:
+            video_paths = {meta["genre"]: [meta["path"]]}
+            metas = [meta]
+        else:
+            logger.error(f"Failed to download: {url}")
+            return None, []
+    elif search_query:
+        logger.info(f"Searching '{search_query}' on {source} (count={count})...")
+        video_paths, metas = download_videos(
+            query=search_query, source=source, count=count,
+            cache_dir=config.dataset_dir,
+        )
+    else:
+        return None, []
+
+    if not metas:
+        logger.error("No videos downloaded.")
+        return None, []
+
+    for meta in metas:
+        logger.info(f"  [{meta['genre']}] {meta['title'][:60]} -> {meta['path']}")
+
+    if download_only:
+        summary_path = os.path.join(config.output_dir, "download_summary.json")
+        with open(summary_path, "w", encoding="utf-8") as f:
+            json.dump([{k: v for k, v in m.items() if k != "path"} for m in metas],
+                      f, indent=2, ensure_ascii=False)
+        logger.info(f"Download summary saved to {summary_path}")
+        return None, metas
+
+    ground_truth_builder = GroundTruthBuilder(config)
+    mock_segments = _generate_mock_segments(config)
+    _, ground_truth = ground_truth_builder.build_ground_truth(mock_segments)
+
+    runner = ExperimentRunner(config)
+    result = runner.run_full_pipeline(
+        video_paths={g: video_paths.get(g, []) for g in config.genre_list},
+        reference_segments=ground_truth,
+    )
+
+    logger.info(f"  Pipeline result — P={result.segment_metrics.precision:.4f}, "
+                 f"R={result.segment_metrics.recall:.4f}, "
+                 f"F1={result.segment_metrics.f1_score:.4f}")
+    return result, metas
+
+
 def main():
     parser = argparse.ArgumentParser(description="SyncCLIPAgent Experiment Suite")
     parser.add_argument("--mock", action="store_true", default=True,
@@ -312,6 +373,17 @@ def main():
                         help="Run with real models (requires GPU+API)")
     parser.add_argument("--data", type=str, default=None,
                         help="Path to dataset directory")
+    parser.add_argument("--url", type=str, default="",
+                        help="Download and process a single video URL")
+    parser.add_argument("--search", type=str, default="",
+                        help="Search query for downloading videos (e.g. 'nature documentary')")
+    parser.add_argument("--source", type=str, default="pexels",
+                        choices=["pexels", "pixabay", "archive", "ytdlp"],
+                        help="Video source for search (default: pexels)")
+    parser.add_argument("--count", type=int, default=5,
+                        help="Number of videos to download when searching (default: 5)")
+    parser.add_argument("--download-only", action="store_true",
+                        help="Download videos without running the experiment pipeline")
     parser.add_argument("--ground-truth", action="store_true",
                         help="Run ground truth construction")
     parser.add_argument("--sensitivity", action="store_true",
@@ -326,13 +398,21 @@ def main():
                         help="Generate visualizations and LaTeX tables")
     parser.add_argument("--all", action="store_true",
                         help="Run all experiments")
+    parser.add_argument("--end-to-end", action="store_true",
+                        help="Run end-to-end pipeline (preprocess->CLIP->Whisper->plan->validate->render)")
+    parser.add_argument("--video", type=str, default="",
+                        help="Video file for end-to-end pipeline")
+    parser.add_argument("--request", type=str, default="",
+                        help="Editing request text for end-to-end pipeline")
+    parser.add_argument("--target-duration", type=float, default=60.0,
+                        help="Target video duration in seconds (default: 60)")
     parser.add_argument("--output", type=str, default="experiments/output",
                         help="Output directory")
 
     args = parser.parse_args()
 
     config = load_config(
-        mock_mode=args.mock,
+        mock_mode=args.mock and not args.real,
         output_dir=args.output,
     )
     if args.data:
@@ -346,10 +426,43 @@ def main():
     logger.info(f"  Mock mode: {config.mock_mode}")
     logger.info(f"  Output:    {config.output_dir}")
 
-    run_all = args.all or not any([
+    is_download = bool(args.url or args.search)
+    is_e2e = args.end_to_end or bool(args.video)
+    has_explicit_experiments = any([
         args.ground_truth, args.sensitivity, args.profile,
         args.robustness, args.projection, args.visualize,
     ])
+
+    if is_download:
+        run_download_pipeline(
+            config,
+            url=args.url,
+            search_query=args.search,
+            source=args.source,
+            count=args.count,
+            download_only=args.download_only,
+        )
+        if args.download_only:
+            logger.info("Download-only mode: skipping experiments.")
+            return
+
+    if is_e2e:
+        logger.info("=" * 60)
+        logger.info("Running End-to-End Pipeline")
+        logger.info("=" * 60)
+        from experiments.run_experiment import EndToEndRunner
+        e2e = EndToEndRunner(config)
+        if args.video:
+            e2e.run_single(args.video, args.request or "Create a highlight video.",
+                           target_duration=args.target_duration, mock=config.mock_mode)
+        else:
+            import tempfile
+            mock_video = os.path.join(tempfile.gettempdir(), "mock_demo_video.mp4")
+            Path(mock_video).touch()
+            e2e.run_single(mock_video, "Create a 60-second highlight reel.", mock=True)
+        e2e.save_results()
+
+    run_all = args.all or (not is_download and not is_e2e and not has_explicit_experiments)
 
     if run_all or args.ground_truth:
         run_ground_truth(config)

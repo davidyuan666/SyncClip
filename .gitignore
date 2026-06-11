@@ -44,4 +44,7 @@ testcase/
 *.png
 testcase/*
 src/evaluation/
+.env
+experiments/data/
+experiments/output/
 

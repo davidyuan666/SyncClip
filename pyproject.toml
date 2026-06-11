@@ -47,6 +47,9 @@ dependencies = [
     "fastapi",
     "python-dotenv",
     
+    # 在线视频下载
+    "yt-dlp>=2024.0.0",
+
     # 工具库
     "cos-python-sdk-v5",
     "tqdm>=4.65.0",

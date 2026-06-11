@@ -15,8 +15,8 @@ DEFAULT_MODEL_CONFIG: Dict = {
     "whisper_model": "large-v3",
     "whisper_embedding_dim": 1280,
     "whisper_sample_rate": 16000,
-    "llm_model": "gpt-4-mini",
-    "gpt_model": "gpt-4o-mini",
+    "llm_model": "deepseek-chat",
+    "gpt_model": "deepseek-chat",
     "common_projection_dim": 256,
     "projection_method": "pca_linear",
     "tts_model": "eleven_multilingual_v2",
@@ -24,11 +24,11 @@ DEFAULT_MODEL_CONFIG: Dict = {
 }
 
 DEFAULT_PARAMETER_SETTINGS: Dict[str, float] = {
-    "theta": 0.65,
+    "theta": 0.18,
     "tau": 0.80,
-    "alpha": 1.0,
-    "beta": 0.5,
-    "delta": 2.0,
+    "alpha": 0.6,
+    "beta": 0.4,
+    "delta": 0.50,
 }
 
 DEFAULT_FPS_OPTIONS: List[int] = [1, 2, 3, 5]
@@ -85,7 +85,7 @@ class ExperimentConfig:
     ])
 
     sensitivity_sweeps: Dict[str, List[float]] = field(default_factory=lambda: {
-        "theta": [0.30, 0.45, 0.55, 0.65, 0.75, 0.85],
+        "theta": [0.05, 0.10, 0.14, 0.18, 0.22, 0.26, 0.30],
         "tau": [0.50, 0.65, 0.75, 0.80, 0.90, 0.95],
         "alpha_beta_ratio": [0.25, 0.5, 1.0, 2.0, 4.0],
         "fps": [1, 2, 3, 5],

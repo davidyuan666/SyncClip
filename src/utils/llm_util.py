@@ -14,42 +14,28 @@ import logging
 class LLMUtil:
     def __init__(self):
         self.vision_model = "gpt-4-vision-preview"
-        self.api_base_url = os.getenv("API_BASE_URL").rstrip('/')
-        self.model = os.getenv("MODEL")
-        self.struct_model = os.getenv("STRUCT_MODEL")
+        _raw_base_url = os.getenv("API_BASE_URL", "")
+        self.api_base_url = _raw_base_url.rstrip('/') if _raw_base_url else ""
+        self.model = os.getenv("MODEL", "deepseek-chat")
+        self.struct_model = os.getenv("STRUCT_MODEL", "deepseek-chat")
         self.whisper_model = None
         self.whisper_model_size = os.getenv("WHISPER_MODEL_SIZE")
-        self.active_key = [
-            {
-                'key': os.getenv("OPENAI_ACTIVE_KEY"),
-                'name': 'seemingai_key',
-                'status': True
-            }
-        ]
-        self.openai_client = OpenAI(api_key=self.active_key[0]['key'])
 
+        deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+        api_key = deepseek_key or openai_key
+        if not api_key:
+            raise Exception("No API key found. Set DEEPSEEK_API_KEY or OPENAI_API_KEY in environment.")
 
-        """
-        OpenAI 配置
-        """
-        self.api_keys = [
-            {
-                "key": os.getenv("OPENAI_API_KEY"),
-                "name": "seemingai_key",
-                "status": True,
-            }
-        ]
+        is_deepseek = bool(deepseek_key)
+        base_url = "https://api.deepseek.com" if is_deepseek else (self.api_base_url or None)
 
-        self.current_key_index = 0
+        self.openai_client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+        ) if base_url else OpenAI(api_key=api_key)
 
-        # 初始化使用第一个活跃的key
-        active_key = next((key for key in self.api_keys if key["status"]), None)
-        if not active_key:
-            raise Exception("No active API keys available")
-
-        self.openai_client = OpenAI(api_key=active_key["key"])
-
-        self.openai_chat_url = "https://api.openai.com/v1/chat/completions"
+        self.openai_chat_url = f"{'https://api.deepseek.com' if is_deepseek else 'https://api.openai.com'}/v1/chat/completions"
         self.messages = []
 
         """
