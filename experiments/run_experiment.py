@@ -117,6 +117,8 @@ class EndToEndRunner:
         if not candidates_5fps or not candidates_5fps.segments:
             return self._empty_result(video_id, request_id, timing, "No candidates generated")
 
+        self._save_candidates(candidates_5fps, video_id)
+
         # 5. Cross-modal projection
         t = time.time()
         vis_embs = np.array([s.visual_embedding for s in candidates_5fps.segments if s.visual_embedding is not None])
@@ -247,6 +249,27 @@ class EndToEndRunner:
             "validation_passed": False, "render_success": False,
             "timing": timing,
         }
+
+    def _save_candidates(self, candidates, video_id: str):
+        try:
+            cand_path = self.output_dir / "candidates" / f"{video_id}_candidates.json"
+            os.makedirs(cand_path.parent, exist_ok=True)
+            data = []
+            for s in candidates.segments:
+                data.append({
+                    "segment_id": s.segment_id,
+                    "start_s": s.start_s,
+                    "end_s": s.end_s,
+                    "duration_s": round(s.duration_s, 2),
+                    "importance_score": round(float(s.importance_score), 4),
+                    "visual_change_score": round(float(s.visual_change_score), 4),
+                    "speech_presence": s.speech_presence,
+                    "event_presence": s.event_presence,
+                })
+            with open(cand_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"Failed to save candidates for {video_id}: {e}")
 
     def _cleanup_frames(self, preprocess: "PreprocessResult"):
         from experiments.preprocess import PreprocessResult
