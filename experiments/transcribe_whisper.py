@@ -115,6 +115,7 @@ class WhisperTranscriber:
     def _real_transcribe(self, audio_path: str, language: str) -> WhisperResult:
         import torch
         import whisper
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
         device = "cuda" if self.use_gpu and torch.cuda.is_available() else "cpu"
         if self._model is None:

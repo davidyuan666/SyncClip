@@ -32,6 +32,8 @@ echo "  RAM: ${RAM_GB}GB"
 echo "  CPU: $CPU_MODEL"
 echo "  CUDA: $CUDA_VER"
 
+export HF_ENDPOINT=https://hf-mirror.com
+
 export SYNCCLIP_GPU="$GPU_NAME"
 export SYNCCLIP_GPU_MEMORY_GB="$GPU_MEM_GB"
 export SYNCCLIP_RAM_GB="$RAM_GB"

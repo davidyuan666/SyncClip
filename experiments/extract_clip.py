@@ -103,6 +103,7 @@ class CLIPExtractor:
 
     def _real_extract(self, frame_paths: List[str], timestamps: Optional[List[float]], fps: int) -> CLIPFeatures:
         import torch
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
         try:
             from transformers import CLIPProcessor, CLIPModel
         except ImportError:
