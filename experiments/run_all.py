@@ -191,19 +191,16 @@ def run_full_pipeline(config: ExperimentConfig, video_paths: Dict[str, List[str]
         video_paths = {g: [f"mock_{g}.mp4"] for g in config.genre_list}
         logger.info("  No videos found, using mock paths")
 
-    segments = _generate_mock_segments(config)
-    ground_truth_result, ground_truth, _ = run_ground_truth(config)
+    logger.info("  Ground truth requires human annotation — using author-review protocol.")
+    logger.info("  Segment/sync/semantic metrics pending completion of human evaluation.")
 
     runner = ExperimentRunner(config)
     result = runner.run_full_pipeline(
         video_paths=video_paths,
-        reference_segments=ground_truth,
+        reference_segments={g: [] for g in config.genre_list},
     )
 
-    logger.info(f"  Overall:  P={result.segment_metrics.precision:.4f}, "
-                 f"R={result.segment_metrics.recall:.4f}, "
-                 f"F1={result.segment_metrics.f1_score:.4f}")
-    logger.info(f"  Per-genre F1:")
+    logger.info(f"  Per-genre F1 (pending human GT):")
     for genre, m in result.segment_metrics.per_genre.items():
         logger.info(f"    {genre:20s} F1={m.f1_score:.4f}")
 

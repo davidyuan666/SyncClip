@@ -93,6 +93,7 @@ class EndToEndRunner:
         timing["clip_s"] = round(time.time() - t, 2)
         clip_5fps = clip_by_fps.get(5, clip_by_fps.get(1))
         logger.info(f"  [{video_id}] [2/8] done: {len(clip_5fps)} embeddings ({timing['clip_s']}s)")
+        self._cleanup_frames(preprocess)
 
         # 3. Whisper
         logger.info(f"  [{video_id}] [3/8] Whisper large-v3 transcribing...")
@@ -101,6 +102,7 @@ class EndToEndRunner:
         whisper = self.whisper_transcriber.transcribe(audio_path, mock=mock)
         timing["whisper_s"] = round(time.time() - t, 2)
         logger.info(f"  [{video_id}] [3/8] done: {len(whisper)} segments ({timing['whisper_s']}s)")
+        self._cleanup_audio(preprocess)
 
         # 4. Build candidates
         logger.info(f"  [{video_id}] [4/8] Building candidates...")
@@ -243,6 +245,23 @@ class EndToEndRunner:
             "validation_passed": False, "render_success": False,
             "timing": timing,
         }
+
+    def _cleanup_frames(self, preprocess: "PreprocessResult"):
+        from experiments.preprocess import PreprocessResult
+        for fps_dir in Path(preprocess.work_dir).glob("frames_*fps"):
+            try:
+                import shutil
+                shutil.rmtree(str(fps_dir), ignore_errors=True)
+            except Exception:
+                pass
+
+    def _cleanup_audio(self, preprocess: "PreprocessResult"):
+        try:
+            audio = Path(preprocess.audio_path) if preprocess.audio_path else None
+            if audio and audio.exists():
+                audio.unlink()
+        except Exception:
+            pass
 
 
 def main():

@@ -124,17 +124,7 @@ class WhisperTranscriber:
         model_size = self.model_name.replace("-v3", "")
         result = self._model.transcribe(audio_path, language=language or None, verbose=False)
 
-        segments = []
-        for seg in result.get("segments", []):
-            dim = BASE_EMBEDDING_DIM if "base" in self.model_name else WHISPER_EMBEDDING_DIM
-            emb = self.rng.normal(0, 0.1, dim).astype(np.float32)
-            emb = emb / (np.linalg.norm(emb) + 1e-8)
-            segments.append(TranscriptSegment(
-                start_s=seg["start"], end_s=seg["end"],
-                text=seg["text"].strip(), confidence=seg.get("confidence", seg.get("no_speech_prob", 1.0)),
-                embedding=emb,
-            ))
-
+        segments, real_embs = self._extract_real_embeddings(audio_path, result)
         full_text = " ".join(s.text for s in segments)
         dim = BASE_EMBEDDING_DIM if "base" in self.model_name else WHISPER_EMBEDDING_DIM
 
@@ -143,6 +133,54 @@ class WhisperTranscriber:
             language=result.get("language", language),
             segments=segments, full_text=full_text, audio_path=audio_path,
         )
+
+    def _extract_real_embeddings(self, audio_path: str, result: dict):
+        import whisper, torch
+        segments = []
+        embs = []
+
+        try:
+            audio = whisper.load_audio(audio_path)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            audio = whisper.pad_or_trim(audio)
+            mel = whisper.log_mel_spectrogram(audio).to(device)
+
+            with torch.no_grad():
+                encoder_output = self._model.encoder(mel.unsqueeze(0)).squeeze(0)
+            total_duration = len(audio) / 16000.0
+            n_frames = encoder_output.shape[0]
+            dim = encoder_output.shape[1] if encoder_output.shape[1] == WHISPER_EMBEDDING_DIM else WHISPER_EMBEDDING_DIM
+
+            for seg in result.get("segments", []):
+                start_frame = max(0, int(seg["start"] / total_duration * n_frames))
+                end_frame = min(n_frames, int(seg["end"] / total_duration * n_frames) + 1)
+                if end_frame > start_frame:
+                    emb = encoder_output[start_frame:end_frame].mean(dim=0).cpu().numpy()
+                else:
+                    emb = encoder_output[start_frame].cpu().numpy()
+                emb = emb / (np.linalg.norm(emb) + 1e-8)
+                embs.append(emb)
+
+                segments.append(TranscriptSegment(
+                    start_s=seg["start"], end_s=seg["end"],
+                    text=seg["text"].strip(),
+                    confidence=seg.get("confidence", seg.get("no_speech_prob", 1.0)),
+                    embedding=emb,
+                ))
+        except Exception as e:
+            logger.warning(f"Failed to extract real Whisper embeddings: {e}, using fallback")
+            dim = BASE_EMBEDDING_DIM if "base" in self.model_name else WHISPER_EMBEDDING_DIM
+            for seg in result.get("segments", []):
+                emb = self.rng.normal(0, 0.1, dim).astype(np.float32)
+                emb = emb / (np.linalg.norm(emb) + 1e-8)
+                segments.append(TranscriptSegment(
+                    start_s=seg["start"], end_s=seg["end"],
+                    text=seg["text"].strip(),
+                    confidence=seg.get("confidence", seg.get("no_speech_prob", 1.0)),
+                    embedding=emb,
+                ))
+
+        return segments, embs
 
     def _mock_transcribe(self, audio_path: str) -> WhisperResult:
         n_segments = self.rng.integers(5, 20)

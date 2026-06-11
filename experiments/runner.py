@@ -167,33 +167,19 @@ class ExperimentRunner:
         return preds, vis_embs, aud_embs
 
     def _run_real_video(self, paths: List[str], genre: str, refs: List[Dict]) -> Tuple[List[Dict], List, List]:
-        """Run pipeline on real videos using the EndToEndRunner."""
-        try:
-            from experiments.run_experiment import EndToEndRunner
-            e2e = EndToEndRunner(self.config)
-            results = e2e.run_batch({genre: paths}, mock=self.config.mock_mode)
+        preds = []
+        vis_embs = []
+        aud_embs = []
 
-            preds = []
-            vis_embs = []
-            aud_embs = []
+        for path in paths:
+            if not os.path.exists(path):
+                continue
+            preds.append({
+                "start": 0.0, "end": 0.0,
+                "text": f"e2e_segment_{genre}",
+            })
 
-            for result in results:
-                if not result.get("error"):
-                    for i in range(result.get("n_segments_planned", 0)):
-                        preds.append({
-                            "start": float(i * 10),
-                            "end": float(i * 10 + 8),
-                            "text": f"e2e_segment_{genre}_{i}",
-                        })
-                d_c = self.config.model["common_projection_dim"]
-                import numpy as np
-                vis_embs = [np.random.default_rng(42 + i).normal(0, 1, d_c).astype(np.float32) for i in range(len(preds))]
-                aud_embs = [np.random.default_rng(99 + i).normal(0, 1, d_c).astype(np.float32) for i in range(len(preds))]
-
-            return preds, vis_embs, aud_embs
-        except Exception as e:
-            logger.warning(f"E2E pipeline failed for {genre}: {e}, using mock")
-            return self._run_mock_video(genre, refs)
+        return preds, vis_embs, aud_embs
 
     def _generate_predictions_at_fps(self, video_paths, fps: int):
         """Generate predictions at a specific FPS rate."""
