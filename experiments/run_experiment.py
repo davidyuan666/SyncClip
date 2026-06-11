@@ -143,7 +143,9 @@ class EndToEndRunner:
         # 8. Render
         logger.info(f"  [{video_id}] [8/8] FFmpeg rendering...")
         t = time.time()
-        render = self.renderer.render(plan, video_path, mock=mock)
+        output_video = str(self.output_dir / "rendered" / f"{video_id}_edited.mp4")
+        os.makedirs(os.path.dirname(output_video), exist_ok=True)
+        render = self.renderer.render(plan, video_path, output_path=output_video, mock=mock)
         timing["render_s"] = round(time.time() - t, 2)
         logger.info(f"  [{video_id}] [8/8] done: {'OK' if render.success else 'FAIL'} ({timing['render_s']}s)")
 
