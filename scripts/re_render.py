@@ -36,12 +36,14 @@ DEFAULT_RENDERED_DIR = "rendered"
 
 
 def _find_output_dir(base: str = DEFAULT_OUTPUT_DIR) -> Path:
-    for candidate in [Path(base), Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / base]:
+    project_root = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    for candidate in [Path(base), project_root / "experiments" / "output"]:
         e2e = candidate / "e2e_results.json"
         plans = candidate / "plans"
         if e2e.exists() and plans.exists():
             return candidate.resolve()
-    return Path(base).resolve()
+    logger.error(f"e2e_results.json and plans/ not found. Looking in: experiments/output/")
+    sys.exit(1)
 
 
 def load_e2e_results(output_dir: Path) -> List[Dict]:
@@ -136,9 +138,13 @@ def main():
             continue
 
         if not os.path.exists(video_path):
-            logger.warning(f"[{i + 1}/{len(e2e_results)}] {video_id}: source video not found at {video_path}")
-            fail_count += 1
-            continue
+            local_path = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / "experiments" / "data" / "vlog" / f"{video_id}.mp4"
+            if local_path.exists():
+                video_path = str(local_path)
+            else:
+                logger.warning(f"[{i + 1}/{len(e2e_results)}] {video_id}: source video not found at {video_path}")
+                fail_count += 1
+                continue
 
         plan = load_plan(output_dir, video_id)
         if plan is None:
