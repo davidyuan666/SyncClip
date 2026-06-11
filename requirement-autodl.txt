@@ -1,0 +1,7 @@
+# SyncCLIPAgent — Minial requirements for AutoDL GPU servers
+# AutoDL images already pre-install: torch, torchvision, numpy, scipy,
+#   scikit-learn, opencv-python, Pillow, transformers, matplotlib, tqdm, requests.
+# Only install what's actually missing:
+openai>=1.0.0
+openai-whisper>=20231117
+ffmpeg-python>=0.2.0
