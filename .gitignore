@@ -50,4 +50,5 @@ experiments/output/
 experiments/youtube/
 experiments/videos_all/
 *.meta.json
+!experiments/urls/*
 
