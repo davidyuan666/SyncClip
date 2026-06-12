@@ -141,15 +141,16 @@ def compute_segment_metrics(
     matched = set()
     for p in predictions:
         found = False
+        p_start = p.get("source_start", p.get("start", 0))
+        p_end = p.get("source_end", p.get("end", 0))
         for j, r in enumerate(references):
             if j in matched:
                 continue
-            inter = max(0, min(p.get("source_end", p.get("end", 0)),
-                              r.get("source_end", r.get("end", 0))) -
-                        max(p.get("source_start", p.get("start", 0)),
-                            r.get("source_start", r.get("start", 0))))
-            union_a = (p.get("source_end", p.get("end", 0)) - p.get("source_start", p.get("start", 0)))
-            union_b = (r.get("source_end", r.get("end", 0)) - r.get("source_start", r.get("start", 0)))
+            r_start = r.get("source_start", r.get("start", r.get("start_s", 0)))
+            r_end = r.get("source_end", r.get("end", r.get("end_s", 0)))
+            inter = max(0, min(p_end, r_end) - max(p_start, r_start))
+            union_a = p_end - p_start
+            union_b = r_end - r_start
             iou = inter / (union_a + union_b - inter) if (union_a + union_b - inter) > 0 else 0
             if iou >= iou_threshold:
                 tp += 1
