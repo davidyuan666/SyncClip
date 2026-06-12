@@ -22,7 +22,11 @@ echo ""
 # ----------------------------------------------------------
 echo "[2/5] Installing system dependencies..."
 START=$SECONDS
-apt-get update -qq && apt-get install -y -qq ffmpeg 2>/dev/null || true
+if command -v ffmpeg &>/dev/null; then
+    echo "  ffmpeg already installed, skip"
+else
+    apt-get update -qq && apt-get install -y -qq ffmpeg
+fi
 ELAPSED=$(($SECONDS - START))
 echo "  ✓ ${ELAPSED}s"
 echo ""
