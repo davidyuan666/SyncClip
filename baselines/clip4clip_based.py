@@ -34,6 +34,8 @@ from baselines.common import (
     greedy_segment_selection, compute_segment_metrics, save_results,
 )
 
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("clip4clip_based")
 

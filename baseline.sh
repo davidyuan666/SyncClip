@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+export HF_ENDPOINT=https://hf-mirror.com
+
 NOW=$(date '+%Y-%m-%d %H:%M:%S')
 
 echo "=== SyncCLIPAgent Baseline Runner ==="
