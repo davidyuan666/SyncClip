@@ -10,7 +10,7 @@ echo ""
 # ----------------------------------------------------------
 # 1. Pull latest code
 # ----------------------------------------------------------
-echo "[1/4] Pulling latest code..."
+echo "[1/5] Pulling latest code..."
 START=$SECONDS
 git pull
 ELAPSED=$(($SECONDS - START))
@@ -18,9 +18,19 @@ echo "  ✓ ${ELAPSED}s"
 echo ""
 
 # ----------------------------------------------------------
-# 2. Install dependencies
+# 2. Install system dependencies
 # ----------------------------------------------------------
-echo "[2/4] Installing dependencies..."
+echo "[2/5] Installing system dependencies..."
+START=$SECONDS
+apt-get update -qq && apt-get install -y -qq ffmpeg 2>/dev/null || true
+ELAPSED=$(($SECONDS - START))
+echo "  ✓ ${ELAPSED}s"
+echo ""
+
+# ----------------------------------------------------------
+# 3. Install Python dependencies
+# ----------------------------------------------------------
+echo "[3/5] Installing Python dependencies..."
 START=$SECONDS
 pip install "openai>=1.0.0" "openai-whisper>=20231117" "ffmpeg-python>=0.2.0" "transformers>=4.44,<4.45"
 ELAPSED=$(($SECONDS - START))
@@ -47,7 +57,7 @@ print(f\"{s['avg_precision']:.2f} {s['avg_recall']:.2f} {s['avg_f1']:.2f} {s['n_
 # ----------------------------------------------------------
 # 3. CLIP4Clip
 # ----------------------------------------------------------
-echo "[3/4] CLIP4Clip"
+echo "[4/5] CLIP4Clip"
 START=$SECONDS
 python -m baselines.clip4clip_based 2>&1 | while IFS= read -r line; do
     if echo "$line" | grep -q '^\['; then
@@ -71,7 +81,7 @@ echo ""
 # ----------------------------------------------------------
 # 4. PGL-SUM
 # ----------------------------------------------------------
-echo "[4/4] PGL-SUM"
+echo "[5/5] PGL-SUM"
 START=$SECONDS
 python -m baselines.pglsum_based 2>&1 | while IFS= read -r line; do
     if echo "$line" | grep -q '^\['; then
