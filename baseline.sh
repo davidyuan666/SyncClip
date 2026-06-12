@@ -10,7 +10,7 @@ echo ""
 # ----------------------------------------------------------
 # 1. Pull latest code
 # ----------------------------------------------------------
-echo "[1/6] Pulling latest code..."
+echo "[1/4] Pulling latest code..."
 START=$SECONDS
 git pull
 ELAPSED=$(($SECONDS - START))
@@ -20,7 +20,7 @@ echo ""
 # ----------------------------------------------------------
 # 2. Install dependencies
 # ----------------------------------------------------------
-echo "[2/6] Installing dependencies..."
+echo "[2/4] Installing dependencies..."
 START=$SECONDS
 pip install "openai>=1.0.0" "openai-whisper>=20231117" "ffmpeg-python>=0.2.0" "transformers>=4.44,<4.45"
 ELAPSED=$(($SECONDS - START))
@@ -28,51 +28,26 @@ echo "  ✓ ${ELAPSED}s"
 echo ""
 
 # ----------------------------------------------------------
-# 3. Rule-Based
+# Helper: read summary.json safely
 # ----------------------------------------------------------
-echo "[3/6] Rule-Based"
-START=$SECONDS
-python -m baselines.rule_based 2>&1 | while IFS= read -r line; do
-    if echo "$line" | grep -q '^\[Rule-Based\]'; then
-        echo "  $line"
-    fi
-done
-ELAPSED=$(($SECONDS - START))
-RULE_TIME="${ELAPSED}s"
-RULE_SUMMARY=$(python -c "
+read_summary() {
+    local path="$1"
+    if [ -f "$path" ]; then
+        python3 -c "
 import json
-with open('experiments/output/baselines/rule_based/summary.json') as f:
+with open('$path') as f:
     s = json.load(f)
 print(f\"{s['avg_precision']:.2f} {s['avg_recall']:.2f} {s['avg_f1']:.2f} {s['n_videos']}\")
-" 2>/dev/null || echo "FAIL FAIL FAIL FAIL")
-echo "  ✓ ${ELAPSED}s | videos=$(echo $RULE_SUMMARY | awk '{print $4}') | P=$(echo $RULE_SUMMARY | awk '{print $1}') R=$(echo $RULE_SUMMARY | awk '{print $2}') F1=$(echo $RULE_SUMMARY | awk '{print $3}')"
-echo ""
-
-# ----------------------------------------------------------
-# 4. SVM-Based
-# ----------------------------------------------------------
-echo "[4/6] SVM-Based"
-START=$SECONDS
-python -m baselines.svm_based 2>&1 | while IFS= read -r line; do
-    if echo "$line" | grep -q '^\[SVM-Based\]'; then
-        echo "  $line"
+" 2>/dev/null || echo "N/A N/A N/A N/A"
+    else
+        echo "N/A N/A N/A N/A"
     fi
-done
-ELAPSED=$(($SECONDS - START))
-SVM_TIME="${ELAPSED}s"
-SVM_SUMMARY=$(python -c "
-import json
-with open('experiments/output/baselines/svm_based/summary.json') as f:
-    s = json.load(f)
-print(f\"{s['avg_precision']:.2f} {s['avg_recall']:.2f} {s['avg_f1']:.2f} {s['n_videos']}\")
-" 2>/dev/null || echo "FAIL FAIL FAIL FAIL")
-echo "  ✓ ${ELAPSED}s | videos=$(echo $SVM_SUMMARY | awk '{print $4}') | P=$(echo $SVM_SUMMARY | awk '{print $1}') R=$(echo $SVM_SUMMARY | awk '{print $2}') F1=$(echo $SVM_SUMMARY | awk '{print $3}')"
-echo ""
+}
 
 # ----------------------------------------------------------
-# 5. CLIP4Clip
+# 3. CLIP4Clip
 # ----------------------------------------------------------
-echo "[5/6] CLIP4Clip"
+echo "[3/4] CLIP4Clip"
 START=$SECONDS
 python -m baselines.clip4clip_based 2>&1 | while IFS= read -r line; do
     if echo "$line" | grep -q '^\['; then
@@ -81,19 +56,22 @@ python -m baselines.clip4clip_based 2>&1 | while IFS= read -r line; do
 done
 ELAPSED=$(($SECONDS - START))
 CLIP_TIME="${ELAPSED}s"
-CLIP_SUMMARY=$(python -c "
-import json
-with open('experiments/output/baselines/clip4clip/summary.json') as f:
-    s = json.load(f)
-print(f\"{s['avg_precision']:.2f} {s['avg_recall']:.2f} {s['avg_f1']:.2f} {s['n_videos']}\")
-" 2>/dev/null || echo "FAIL FAIL FAIL FAIL")
-echo "  ✓ ${ELAPSED}s | videos=$(echo $CLIP_SUMMARY | awk '{print $4}') | P=$(echo $CLIP_SUMMARY | awk '{print $1}') R=$(echo $CLIP_SUMMARY | awk '{print $2}') F1=$(echo $CLIP_SUMMARY | awk '{print $3}')"
+CLIP_SUMMARY=$(read_summary "experiments/output/baselines/clip4clip/summary.json")
+CLIP_P=$(echo "$CLIP_SUMMARY" | awk '{print $1}')
+CLIP_R=$(echo "$CLIP_SUMMARY" | awk '{print $2}')
+CLIP_F1=$(echo "$CLIP_SUMMARY" | awk '{print $3}')
+CLIP_N=$(echo "$CLIP_SUMMARY" | awk '{print $4}')
+if [ "$CLIP_P" = "N/A" ]; then
+    echo "  ✗ FAIL"
+else
+    echo "  ✓ ${ELAPSED}s | ${CLIP_N}/22 videos | P=${CLIP_P} R=${CLIP_R} F1=${CLIP_F1}"
+fi
 echo ""
 
 # ----------------------------------------------------------
-# 6. PGL-SUM
+# 4. PGL-SUM
 # ----------------------------------------------------------
-echo "[6/6] PGL-SUM"
+echo "[4/4] PGL-SUM"
 START=$SECONDS
 python -m baselines.pglsum_based 2>&1 | while IFS= read -r line; do
     if echo "$line" | grep -q '^\['; then
@@ -102,49 +80,30 @@ python -m baselines.pglsum_based 2>&1 | while IFS= read -r line; do
 done
 ELAPSED=$(($SECONDS - START))
 PGL_TIME="${ELAPSED}s"
-PGL_SUMMARY=$(python -c "
-import json
-with open('experiments/output/baselines/pglsum/summary.json') as f:
-    s = json.load(f)
-print(f\"{s['avg_precision']:.2f} {s['avg_recall']:.2f} {s['avg_f1']:.2f} {s['n_videos']}\")
-" 2>/dev/null || echo "FAIL FAIL FAIL FAIL")
-echo "  ✓ ${ELAPSED}s | videos=$(echo $PGL_SUMMARY | awk '{print $4}') | P=$(echo $PGL_SUMMARY | awk '{print $1}') R=$(echo $PGL_SUMMARY | awk '{print $2}') F1=$(echo $PGL_SUMMARY | awk '{print $3}')"
+PGL_SUMMARY=$(read_summary "experiments/output/baselines/pglsum/summary.json")
+PGL_P=$(echo "$PGL_SUMMARY" | awk '{print $1}')
+PGL_R=$(echo "$PGL_SUMMARY" | awk '{print $2}')
+PGL_F1=$(echo "$PGL_SUMMARY" | awk '{print $3}')
+PGL_N=$(echo "$PGL_SUMMARY" | awk '{print $4}')
+if [ "$PGL_P" = "N/A" ]; then
+    echo "  ✗ FAIL"
+else
+    echo "  ✓ ${ELAPSED}s | ${PGL_N}/22 videos | P=${PGL_P} R=${PGL_R} F1=${PGL_F1}"
+fi
 echo ""
 
 # ----------------------------------------------------------
 # Summary
 # ----------------------------------------------------------
 echo "========================================"
-printf "%-16s %8s %8s %8s %8s\n" "Baseline" "P" "R" "F1" "Time"
-echo "----------------------------------------"
-printf "%-16s %8.2f %8.2f %8.2f %8s\n" \
-    "Rule-Based" \
-    $(echo $RULE_SUMMARY | awk '{print $1}') \
-    $(echo $RULE_SUMMARY | awk '{print $2}') \
-    $(echo $RULE_SUMMARY | awk '{print $3}') \
-    "$RULE_TIME"
-printf "%-16s %8.2f %8.2f %8.2f %8s\n" \
-    "SVM-Based" \
-    $(echo $SVM_SUMMARY | awk '{print $1}') \
-    $(echo $SVM_SUMMARY | awk '{print $2}') \
-    $(echo $SVM_SUMMARY | awk '{print $3}') \
-    "$SVM_TIME"
-printf "%-16s %8.2f %8.2f %8.2f %8s\n" \
-    "CLIP4Clip" \
-    $(echo $CLIP_SUMMARY | awk '{print $1}') \
-    $(echo $CLIP_SUMMARY | awk '{print $2}') \
-    $(echo $CLIP_SUMMARY | awk '{print $3}') \
-    "$CLIP_TIME"
-printf "%-16s %8.2f %8.2f %8.2f %8s\n" \
-    "PGL-SUM" \
-    $(echo $PGL_SUMMARY | awk '{print $1}') \
-    $(echo $PGL_SUMMARY | awk '{print $2}') \
-    $(echo $PGL_SUMMARY | awk '{print $3}') \
-    "$PGL_TIME"
+printf "  %-14s %8s %8s %8s %8s\n" "Baseline" "P" "R" "F1" "Time"
+echo "  --------------------------------------"
+printf "  %-14s %8s %8s %8s %8s\n" \
+    "CLIP4Clip" "$CLIP_P" "$CLIP_R" "$CLIP_F1" "$CLIP_TIME"
+printf "  %-14s %8s %8s %8s %8s\n" \
+    "PGL-SUM" "$PGL_P" "$PGL_R" "$PGL_F1" "$PGL_TIME"
 echo "========================================"
 echo ""
 echo "Results directories:"
-echo "  experiments/output/baselines/rule_based/"
-echo "  experiments/output/baselines/svm_based/"
 echo "  experiments/output/baselines/clip4clip/"
 echo "  experiments/output/baselines/pglsum/"
