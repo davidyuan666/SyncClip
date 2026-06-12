@@ -39,6 +39,12 @@ echo ""
 echo "=== Dependencies ==="
 pip install -r requirement-autodl.txt --system -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || true
 
+# ——— Ensure ffmpeg is available ———
+if ! command -v ffmpeg &> /dev/null; then
+    echo "  ffmpeg not found, installing..."
+    apt update -qq && apt install -y ffmpeg 2>/dev/null || conda install -c conda-forge ffmpeg -y 2>/dev/null || true
+fi
+
 export SYNCCLIP_GPU="$GPU_NAME"
 export SYNCCLIP_GPU_MEMORY_GB="$GPU_MEM_GB"
 export SYNCCLIP_RAM_GB="$RAM_GB"
