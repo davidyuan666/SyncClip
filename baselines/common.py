@@ -117,7 +117,7 @@ def greedy_segment_selection(
             continue
         if current_dur + dur > target_duration + 2:
             continue
-        if selected and seg["start_s"] - selected[-1]["end_s"] < min_gap:
+        if selected and seg["start_s"] - selected[-1]["source_end"] < min_gap:
             continue
         selected.append({
             "segment_id": seg["segment_id"],
