@@ -101,6 +101,8 @@ def _encode_frames(frame_paths: List[str]) -> np.ndarray:
         emb = outputs.cpu().numpy().astype(np.float32)
         emb = emb / (np.linalg.norm(emb, axis=1, keepdims=True) + 1e-8)
         embeddings.append(emb)
+        done = min(i + batch_size, len(frame_paths))
+        logger.info(f"    CLIP encoding {done}/{len(frame_paths)} frames")
 
     if not embeddings:
         return np.zeros((0, CLIP_DIM), dtype=np.float32)

@@ -20,10 +20,10 @@ def extract_frames(video_path: str, work_dir: str, fps: int = 5) -> List[np.ndar
         stream = ffmpeg.input(video_path)
         stream = ffmpeg.filter(stream, "fps", fps=fps)
         stream = ffmpeg.output(stream, pattern, start_number=0)
-        ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True, quiet=True)
+        ffmpeg.run(stream, overwrite_output=True, capture_stdout=False, capture_stderr=False)
     except Exception:
         cmd = ["ffmpeg", "-i", video_path, "-vf", f"fps={fps}", "-q:v", "2", pattern, "-y"]
-        subprocess.run(cmd, capture_output=True, timeout=300)
+        subprocess.run(cmd, timeout=300)
 
     from PIL import Image
     frames = []

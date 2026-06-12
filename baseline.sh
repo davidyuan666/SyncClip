@@ -65,11 +65,8 @@ print(f\"{s['avg_precision']:.2f} {s['avg_recall']:.2f} {s['avg_f1']:.2f} {s['n_
 # ----------------------------------------------------------
 echo "[4/5] CLIP4Clip"
 START=$SECONDS
-python -m baselines.clip4clip_based 2>&1 | while IFS= read -r line; do
-    if echo "$line" | grep -q '^\['; then
-        echo "  $line"
-    fi
-done
+export PYTHONUNBUFFERED=1
+python -m baselines.clip4clip_based
 ELAPSED=$(($SECONDS - START))
 CLIP_TIME="${ELAPSED}s"
 CLIP_SUMMARY=$(read_summary "experiments/output/baselines/clip4clip/summary.json")
@@ -89,11 +86,8 @@ echo ""
 # ----------------------------------------------------------
 echo "[5/5] PGL-SUM"
 START=$SECONDS
-python -m baselines.pglsum_based 2>&1 | while IFS= read -r line; do
-    if echo "$line" | grep -q '^\['; then
-        echo "  $line"
-    fi
-done
+export PYTHONUNBUFFERED=1
+python -m baselines.pglsum_based
 ELAPSED=$(($SECONDS - START))
 PGL_TIME="${ELAPSED}s"
 PGL_SUMMARY=$(read_summary "experiments/output/baselines/pglsum/summary.json")
