@@ -5,7 +5,7 @@ export HF_ENDPOINT=https://hf-mirror.com
 
 NOW=$(date '+%Y-%m-%d %H:%M:%S')
 
-echo "=== SyncCLIPAgent Baseline Runner ==="
+echo "=== SyncCLIPAgent Baseline Runner (GPU) ==="
 echo "$NOW"
 echo ""
 
@@ -44,7 +44,7 @@ echo "  ✓ ${ELAPSED}s"
 echo ""
 
 # ----------------------------------------------------------
-# Helper: read summary.json safely
+# Helper: read summary.json
 # ----------------------------------------------------------
 read_summary() {
     local path="$1"
@@ -61,7 +61,7 @@ print(f\"{s['avg_precision']:.2f} {s['avg_recall']:.2f} {s['avg_f1']:.2f} {s['n_
 }
 
 # ----------------------------------------------------------
-# 3. CLIP4Clip
+# 4. CLIP4Clip
 # ----------------------------------------------------------
 echo "[4/5] CLIP4Clip"
 START=$SECONDS
@@ -82,7 +82,7 @@ fi
 echo ""
 
 # ----------------------------------------------------------
-# 4. PGL-SUM
+# 5. PGL-SUM
 # ----------------------------------------------------------
 echo "[5/5] PGL-SUM"
 START=$SECONDS
